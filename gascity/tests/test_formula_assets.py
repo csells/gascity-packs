@@ -3635,6 +3635,32 @@ class FormulaAssetTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, node_description(root, prepare))
 
+    def test_implement_prepare_judges_this_runs_effects_not_its_compiled_graph(self) -> None:
+        """The compiler creates the run's root, drains, controls and routed steps
+        before prepare runs, so prepare must not fail because they exist. Read
+        literally, the old "no workflow roots, drain controls, routed beads,
+        worktrees ... have been created before validation" rejected every run,
+        and a careful validator did. Neither may pre-existing worktrees of other
+        runs fail it. A drain's own gc.drain_state is the signal that execution
+        began: it is set to expanding before any unit, child workflow or
+        worktree is created."""
+        root = pathlib.Path(__file__).resolve().parents[1]
+        data = tomllib.loads((root / "formulas" / "implement.formula.toml").read_text(encoding="utf-8"))
+        prepare = node_description(root, next(step for step in data["steps"] if step["id"] == "prepare"))
+
+        self.assertNotIn("no workflow roots, drain controls, routed beads", prepare)
+        for fragment in (
+            "compiled graph exists before this step runs",
+            "Do\nnot fail because they exist",
+            "--metadata-field gc.root_bead_id=<ROOT_ID> --metadata-field gc.kind=drain",
+            "`gc.drain_state=pending`",
+            "`gc.drain_state=expanding`",
+            "belong to other runs",
+            "do not modify or remove them",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, prepare)
+
     def assert_validation_failure_aborts_drains(
         self,
         data: dict,
