@@ -1,0 +1,11 @@
+{
+  "title": "Gas City Supervisor API",
+  "source_repository": "https://github.com/gastownhall/gascity",
+  "source_ref": "main",
+  "source_commit": "b3d2cdf3172d325a5556c2321df30e642334d527",
+  "source_path": "internal/api/openapi.json",
+  "build": "unreleased",
+  "notes": "internal/api/openapi.json at gastownhall/gascity main b3d2cdf31 (2026-10-17). Every operation the plugin calls is also in v1.5.0, which the pack requires; main adds only optional fields and event types the plugin does not use. No release or production qualification is implied.",
+  "sha256": "bfb5c927a3fa97c0d4f5c3c8bc994d9016e57ac5b80d7910b43225e675d5b12b",
+  "generator": "@hey-api/openapi-ts@0.99.0"
+}

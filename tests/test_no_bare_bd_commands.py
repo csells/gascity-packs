@@ -173,6 +173,20 @@ GC_LINT_DIAGNOSTIC = re.compile(
 )
 
 
+# Gas City's own OpenAPI document, vendored by the bb pack, and the TypeScript
+# client generated from it. Their descriptions mention `bd close` and
+# `bd update` as GC documents its API; nothing here is a command the pack runs,
+# and regenerating the client must reproduce GC's text byte for byte.
+VENDORED_GC_API_DIRS = (
+    Path("bb/assets/plugin/contracts/gc"),
+    Path("bb/assets/plugin/src/generated/gc"),
+)
+
+
+def vendored_gc_api(relative: Path) -> bool:
+    return any(relative.is_relative_to(directory) for directory in VENDORED_GC_API_DIRS)
+
+
 def tracked_files() -> list[Path]:
     result = subprocess.run(
         ["git", "ls-files", "-z"],
@@ -275,7 +289,7 @@ def bare_bd_violations(path: Path, text: str) -> list[str]:
 def test_shipped_pack_assets_route_beads_commands_through_gc() -> None:
     violations = []
     for path in tracked_files():
-        if path.resolve() == THIS_FILE:
+        if path.resolve() == THIS_FILE or vendored_gc_api(path.relative_to(REPO_ROOT)):
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -311,6 +325,12 @@ def test_detector_covers_shell_multiline_and_serialized_argv_forms() -> None:
     # regress to line-numbers-only and every waiver entry would read as a bare
     # bd command, which is a failure about the wrong file.
     assert not bare_bd_violations(waiver, lineless)
+
+    # The vendored GC API exemption covers exactly those two directories.
+    assert vendored_gc_api(Path("bb/assets/plugin/contracts/gc/openapi.json"))
+    assert vendored_gc_api(Path("bb/assets/plugin/src/generated/gc/sdk.gen.ts"))
+    assert not vendored_gc_api(Path("bb/assets/plugin/src/provider.ts"))
+    assert not vendored_gc_api(Path("bb/commands/install/run.sh"))
 
     assert not bare_bd_violations(fixture, 'command = ["gc", "bd", "show"]')
     assert not bare_bd_violations(fixture, "gc --city /tmp/city bd list --json")
