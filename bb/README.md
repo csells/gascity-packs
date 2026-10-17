@@ -372,8 +372,27 @@ The Python checks use the **actual GC binary** for pack lint,
 resolved configuration, command discovery, and executable entrypoints.
 The compatibility workflow (`.github/workflows/bb-provider.yml`) builds the
 released GC it pins, runs these checks against it, and builds every plugin
-entry with the published BB it pins. It needs no repository secrets. Installer
+entry with the published BB it pins. It needs no repository secrets; the live
+jobs below run only on manual dispatch and need inference secrets. Installer
 tests exercise failed builds, registration rollback and retained data.
+
+`BB end-to-end acceptance` additionally requires actual Claude and Codex
+conversations through published BB and released GC, for global and rig
+agents: two verified completions, retained context, a tool event and its file
+output, followed by agent suspension and a third turn proving the same provider
+conversation and memory without tools. Missing inference credentials fail the check.
+Each model job first makes one real call through the runtime CLI
+(`bb/tests/credential_preflight.py`) and prints only a redacted HTTP status, so a
+rejected secret fails once and visibly. See
+[live CI setup and reproduction](./docs/verification.md#ci-acceptance).
+
+`bb/tests/full_e2e.py` adds the rendered New thread and launcher journeys,
+every advertised reasoning level, real permissions, queueing, interruption,
+process recovery, lost responses, installation changes, and visible failures.
+Its required-case ledger cannot pass with missing or failed cases. Run it
+against the same retained installation while diagnosing failures; on macOS
+the gate also requires the isolated released desktop app. See
+[the full product gate](./docs/verification.md#full-product-gate).
 
 The layout follows this repository's pack pattern: schema-2 `pack.toml`,
 documented `commands/*/run.sh`, a `doctor` check, and adapter code under
