@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessCompletion, assessDenial, revealDeniedTurn, assessRejection, assessLauncherRejection, submitQueuedPrompt, assertPersistedQueuedPrompt, eventsAfter } from './browser_driver.mjs';
+import { dismissFirstRunGuide, assessCompletion, assessDenial, revealDeniedTurn, assessRejection, assessLauncherRejection, submitQueuedPrompt, assertPersistedQueuedPrompt, eventsAfter } from './browser_driver.mjs';
 
 test('event pagination obeys the BB 100-row limit and retains every event across sparse cursors', async () => {
   const expected = Array.from({ length: 237 }, (_, index) => ({ seq: 15 + index * 2, data: { value: index } }));
@@ -296,4 +296,33 @@ test('the captured persisted queue needs exactly one full prompt with the accept
     [{ ...accepted, content: [...accepted.content, { type: 'image', url: 'extra' }] }],
     [{ ...accepted, content: undefined, input: accepted.content }],
   ]) assert.throws(() => assertPersistedQueuedPrompt(rows, accepted, prompt));
+});
+
+function fakeGuidePage(guideShown) {
+  const state = { guide: guideShown, clicks: 0 };
+  const locator = kind => {
+    const self = {
+      or: other => ({ first: () => ({ waitFor: async () => assert.ok(state.guide || kind === 'ready' || other) }) }),
+      isVisible: async () => kind === 'skip' ? state.guide : !state.guide,
+      click: async () => { assert.equal(kind, 'skip'); state.clicks++; state.guide = false; },
+      waitFor: async () => assert.equal(kind === 'ready' && state.guide, false),
+    };
+    return self;
+  };
+  return { state, page: {
+    getByText: (text, options) => { assert.deepEqual([text, options], ['Skip setup', { exact: true }]); return locator('skip'); },
+    getByRole: (role, options) => { assert.equal(role, 'button'); assert.ok(options.name.test('New thread (Ctrl + N)')); return locator('ready'); },
+  } };
+}
+
+test('a fresh BB store first-run guide is skipped once and recorded', async () => {
+  const steps = [];
+  const fresh = fakeGuidePage(true);
+  assert.equal(await dismissFirstRunGuide(fresh.page, name => steps.push(name)), true);
+  assert.equal(fresh.state.clicks, 1);
+  assert.deepEqual(steps, ['dismissed BB first-run setup guide with Skip setup']);
+  const ready = fakeGuidePage(false);
+  assert.equal(await dismissFirstRunGuide(ready.page, name => steps.push(name)), false);
+  assert.equal(ready.state.clicks, 0);
+  assert.equal(steps.length, 1);
 });

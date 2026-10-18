@@ -156,6 +156,21 @@ export async function interruptControl(page) {
   return { locator: cancel, kind: 'approval Cancel' };
 }
 
+// BB 0.46 shows a first-run setup guide ("Connect a coding agent ...") on every
+// new store until it is completed or skipped, and it hides the New thread and
+// sidebar controls. Skipping it is the documented user action and only records
+// onboardingCompletedAt in the isolated store's settings; it installs nothing.
+export async function dismissFirstRunGuide(page, step = () => {}) {
+  const skip = page.getByText('Skip setup', { exact: true });
+  const ready = page.getByRole('button', { name: /^New thread \(/ });
+  await ready.or(skip).first().waitFor({ state: 'visible' });
+  if (!await skip.isVisible()) return false;
+  await skip.click();
+  await ready.waitFor({ state: 'visible' });
+  step('dismissed BB first-run setup guide with Skip setup');
+  return true;
+}
+
 export async function submitQueuedPrompt(page, threadId) {
   const control = page.getByRole('button', { name: /^(Queue follow-up|Steer current run|Steer when ready) \(Enter\)(?:, .* to queue)?$/ });
   await control.waitFor({ state: 'visible' });
@@ -296,6 +311,7 @@ export async function runBrowser(argv = process.argv.slice(2), surface = null) {
     });
 
     await page.goto(new URL('/', args.url).href);
+    result.dismissedFirstRunGuide = await dismissFirstRunGuide(page, step);
     result.bbVersion = await getJson(page, args.url, '/api/v1/system/version');
     const hosts = await getJson(page, args.url, '/api/v1/hosts');
     assert.ok(hosts.some(host => host.id === args.host && host.status === 'connected'), 'Requested BB host is not connected');
