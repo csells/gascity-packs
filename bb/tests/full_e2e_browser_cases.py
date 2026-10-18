@@ -266,7 +266,11 @@ def create_fixture(runner, *, trusted=True, configured_mayor=False):
             f'command = {json.dumps(binary)}\n'
             f'resume_command = {json.dumps(shlex.quote(binary) + (" --resume {{.SessionKey}}" if runner.runtime == "claude" else " resume {{.SessionKey}}"))}\n'
             + ('session_id_flag = "--session-id"\n' if runner.runtime == "claude" else '') +
-            f'[providers.{name}.env]\n' + ''.join(f'{json.dumps(k)} = {json.dumps(v)}\n' for k,v in provider_env.items()))
+            f'[providers.{name}.env]\n' + ''.join(f'{json.dumps(k)} = {json.dumps(v)}\n' for k,v in provider_env.items()) +
+            # Shipped gastown declares the mayor as a named session (pack.toml);
+            # GC refuses an on-demand session for a max_active_sessions = 1 agent
+            # without one ("demand-only-singleton").
+            f'[[named_session]]\ntemplate = {json.dumps(name)}\nscope = "city"\nmode = "always"\n')
     agent_dir = city / "agents" / name
     agent_dir.mkdir(mode=0o700, exist_ok=False)
     if configured_mayor:
