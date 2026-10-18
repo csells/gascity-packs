@@ -161,9 +161,11 @@ def bind_fixture_project(runner, name, workspace):
     """Give a fixture workspace its own mapped BB project, as a user would with
     `gc bb bind`; the native picker lists Gas City agents only for mapped projects.
 
-    The binding is city-scoped (no --rig): GC also expands an agent added to the
-    city's agents/ directory into each rig, and a rig binding lists that rig
-    copy (sample/<name>) instead of the city agent the fixture defines."""
+    The binding is city-scoped (no --rig): each fixture declares a provider with
+    its own name, and GC injects one implicit agent per provider at city scope and
+    in every rig (InjectImplicitAgents). The explicit city fixture replaces only
+    the city copy, so a rig binding would list the implicit sample/<name> agent in
+    place of the fixture the case selects."""
     project = runner.bb("project", "create", "--name", name, "--root", str(workspace),
                         "--host", runner.manifest["hostId"], "--json")["id"]
     runner.command(runner.manifest["commands"]["gc"], "bb", "bind", "--project", project,
