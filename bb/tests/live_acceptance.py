@@ -129,6 +129,13 @@ def claude_failure_diagnostics(root, scope_report):
     return {"status": "unmatched"}
 
 
+def require_development_version(gc_version):
+    """A declared development build keeps its own version stamp, whatever its form."""
+    if not gc_version or gc_version in CORE_COMMITS:
+        raise GateError("Development GC must report its own non-release version; build it without a release version stamp")
+    return gc_version
+
+
 def save_new(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x") as stream:
@@ -282,9 +289,12 @@ def main():
         if core_release not in CORE_COMMITS:
             raise GateError("Live acceptance requires a declared released GC core version")
         if args.gc_development_base:
-            if not gc_version.startswith(args.gc_development_base + "-"):
-                raise GateError("Development GC must carry an explicit prerelease version based on --gc-development-base")
-            progress("DEVELOPMENT VALIDATION ONLY: this cannot certify a released GC binary")
+            # The caller declares the build as development and names the
+            # release whose core pack it imports. Its own version stamp is
+            # recorded as-is; only a released version string is refused, since
+            # that would let a development run read as release evidence.
+            require_development_version(gc_version)
+            progress(f"DEVELOPMENT VALIDATION ONLY ({gc_version} on the {core_release} core): this cannot certify a released GC binary")
         with Path(commands["gc"]).open("rb") as stream:
             report["gcBinarySha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
         report["coreRelease"] = core_release

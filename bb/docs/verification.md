@@ -95,11 +95,12 @@ those three explicitly named reports.
 
 CI builds the released GC pinned in the workflow and passes its commit with
 `--gc-commit`. To validate a GC development build instead, add
-`--gc-development-base 1.5.0` and `--gc-commit <full source commit>`, and use a
-binary reporting a prerelease version such as `1.5.0-dev.002016a8679a`. The
-harness then imports the `core` pin that 1.5.0's `gc init` writes. Reports
-identify this as development validation and record the binary hash; it does
-not certify a released binary.
+`--gc-development-base 1.5.0` and `--gc-commit <full source commit>`. The
+binary keeps its own version stamp, for example `1.6.0-dev-integration.40fa8f780`;
+only a released version string is refused. The harness then imports the `core`
+pin that 1.5.0's `gc init` writes. Reports identify this as development
+validation and record the actual version and binary hash; it does not certify a
+released binary.
 
 ## Full product gate
 
