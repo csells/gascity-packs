@@ -249,14 +249,19 @@ def create_fixture(runner, *, trusted=True, configured_mayor=False):
         # A prepared Claude provider may load authorized API credentials from
         # its private wrapper. Keep that source rather than falling back to
         # stale ambient OAuth. Its workspace-specific config remains this copy.
-        wrapper = Path(source_provider["command"]).resolve(strict=True)
-        if not wrapper.is_file():
+        launch = Path(source_provider["command"])
+        wrapper = launch.resolve(strict=True)
+        if not launch.is_absolute() or not wrapper.is_file():
             raise AcceptanceFailure("Claude credential wrapper is not a regular file")
         if not wrapper.is_relative_to(runner.root):
             artifact = runtime_artifact(wrapper, runner.manifest["versions"][runner.runtime], runner.command)
             if artifact != runner.manifest.get("runtimeLaunchArtifact"):
                 raise AcceptanceFailure("External Claude credential wrapper differs from the pinned launch artifact")
-        binary = str(wrapper)
+        # Validate the resolved target, but launch through the same path the
+        # source provider uses (npm's .bin/claude). Resolving it to
+        # .../bin/claude.exe makes the process name claude.exe, which GC's
+        # inherited process_names do not match, so GC recycles a live session.
+        binary = str(launch)
     if not native:
         provider_env[key] = str(runtime_config)
     declaration = permission_provider(runner.runtime, name, binary,

@@ -108,6 +108,11 @@ def create_error_fixture(runner, mode):
         raise AcceptanceFailure("Unknown runtime failure fixture")
     artifact = verified_runtime_artifact(runner)
     binary = artifact["path"]
+    # Exec through the runtime's own launch path (npm's .bin/claude) when it
+    # resolves to the pinned artifact: the kernel names the process after the
+    # executed path, and GC's process_names match "claude", not "claude.exe".
+    on_path = shutil.which(runner.runtime, path=runner.env["PATH"])
+    launch = on_path if on_path and str(Path(on_path).resolve()) == binary else binary
     name = f"e2e-{runner.runtime}-{mode}-" + secrets.token_hex(5)
     city = (runner.root / "city").resolve(strict=True)
     if not city.is_relative_to(runner.root):
@@ -158,7 +163,7 @@ os.environ[{("OPENAI_API_KEY" if runner.runtime == "codex" else "CLAUDE_CODE_OAU
 from codex_hook_trust import verify_launch
 verify_launch(Path.cwd(), {str(runtime_config)!r}, [{str(workspace)!r}], os.environ, {runner.manifest["codexHookSet"]!r})
 '''
-    code += f'os.execv({binary!r}, [{binary!r}, *sys.argv[1:]])\n'
+    code += f'os.execv({launch!r}, [{launch!r}, *sys.argv[1:]])\n'
     with script.open("x") as stream: stream.write(code)
     script.chmod(0o600)
     with wrapper.open("x") as stream:
