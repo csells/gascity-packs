@@ -93,6 +93,48 @@ class RetainedProcessGuardTests(unittest.TestCase):
         finally:
             child.kill(); child.wait(timeout=3); child.stdout.close()
 
+    def test_runtime_record_may_name_the_relaunched_child_of_the_prepared_launcher(self):
+        # BB 0.46: the started bb-app shim relaunches its entry as a child and
+        # records that child. Only a verified descendant running the same entry
+        # in the same isolated store is accepted.
+        entry = self.root / "dist-bb-app.py"
+        entry.write_text("import time; print('CHILD', flush=True); time.sleep(300)\n")
+        shim = self.root / "bin-bb-app"
+        shim.symlink_to(entry)
+        launcher = self.root / "launcher.py"
+        launcher.write_text("import subprocess, sys\nchild = subprocess.Popen([sys.executable, sys.argv[1]], stdout=subprocess.PIPE)\n"
+                            "child.stdout.readline(); print(child.pid, flush=True); child.wait()\n")
+        data = Path(self.required["BB_DATA_DIR"])
+        data.mkdir()
+        app = subprocess.Popen([sys.executable, str(launcher), str(entry)], env={**os.environ, **self.required},
+                               stdout=subprocess.PIPE, text=True)
+        try:
+            child_pid = int(app.stdout.readline())
+            # The launcher's own argv names the shim, as `node .bin/bb-app` does.
+            def runner(pid):
+                return SimpleNamespace(env=self.required, manifest={"appPid": pid, "bbUrl": "http://127.0.0.1:1",
+                    "versions": {"bb": "0.46.1"}, "commands": {"app": str(shim)}})
+            record = {"pid": child_pid, "serverUrl": "http://127.0.0.1:1", "version": "0.46.1", "entryPath": str(entry)}
+            (data / "bb-app-runtime.json").write_text(json.dumps(record))
+            cases = LifecycleCases.__new__(LifecycleCases)
+            with patch("full_e2e_lifecycle_cases.canonical_entry_token", side_effect=lambda command, entry_path: str(entry)):
+                cases.runner = runner(app.pid)
+                identity, env = cases.app_identity()
+                self.assertEqual((identity["pid"], identity["parent_pid"]), (child_pid, app.pid))
+                self.assertEqual(env, {"BB_DATA_DIR": self.required["BB_DATA_DIR"]})
+                # The same record cannot vouch for a process outside that launcher's tree.
+                cases.runner = runner(self.process.pid)
+                with self.assertRaisesRegex(LifecycleFailure, "prepared test launcher"):
+                    cases.app_identity()
+                cases.runner = runner(app.pid)
+                (data / "bb-app-runtime.json").write_text(json.dumps({**record, "version": "0.45.0"}))
+                with self.assertRaisesRegex(LifecycleFailure, "prepared test launcher"):
+                    cases.app_identity()
+        finally:
+            for pid in children(app.pid):
+                os.kill(pid, 9)
+            app.kill(); app.wait(timeout=3); app.stdout.close()
+
     def test_bridge_uses_gc_state_and_verified_host_when_bb_scrubs_data_dir(self):
         env = {**os.environ, "BB_DATA_DIR": str(self.root / "bb-data"),
                "GC_BB_CONFIG": str(self.root / "config/bb.json"), "XDG_STATE_HOME": str(self.root / "state")}

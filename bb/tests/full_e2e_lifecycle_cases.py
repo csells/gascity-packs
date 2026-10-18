@@ -249,13 +249,31 @@ class LifecycleCases:
             # The actual PID, birth, UID, exact entry and isolated process env
             # still establish ownership. Never recreate or overwrite metadata.
             return inspect_process(self.runner.manifest["appPid"], env, command_contains=actual_entry), env
-        if (record.get("pid") != self.runner.manifest["appPid"]
+        launched = self.runner.manifest["appPid"]
+        if (type(record.get("pid")) is not int
                 or record.get("serverUrl") != self.runner.manifest["bbUrl"]
                 or record.get("version") != self.runner.manifest["versions"]["bb"]
                 or Path(record.get("entryPath") or "/").resolve() != Path(self.runner.manifest["commands"]["app"]).resolve()):
             raise LifecycleFailure("BB runtime record does not identify the prepared test launcher")
-        identity = inspect_process(record["pid"], env, command_contains=actual_entry)
-        return identity, env
+        if record["pid"] == launched:
+            return inspect_process(launched, env, command_contains=actual_entry), env
+        # BB 0.46 relaunches its CLI entry as a child process and records that
+        # child. Accept it only as a verified descendant of the launcher this
+        # harness started, running the same entry in the same isolated store.
+        recorded = subprocess.run(["ps", "-ww", "-p", str(record["pid"]), "-o", "command="],
+                                  capture_output=True, text=True, timeout=10).stdout.strip()
+        if not recorded:
+            raise LifecycleFailure("BB runtime record names a process that is not running")
+        identity = inspect_process(record["pid"], env, command_contains=canonical_entry_token(recorded, entry))
+        ancestor = identity["parent_pid"]
+        for _ in range(4):
+            if ancestor == launched:
+                inspect_process(launched, env, command_contains=actual_entry)
+                return identity, env
+            if ancestor <= 1 or ancestor == os.getpid():
+                break
+            ancestor = inspect_process(ancestor, env)["parent_pid"]
+        raise LifecycleFailure("BB runtime record does not identify the prepared test launcher")
 
     def bb_child(self, kind):
         app, _ = self.app_identity()
