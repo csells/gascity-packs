@@ -32,6 +32,11 @@ def prepare_fixtures(runner, selected):
     runner.prepared_browser_fixtures = browser
     runner.prepared_error_fixtures = errors
     runner.prepared_catalog_ids = {item["agent"]["id"] for item in fixtures}
+    # Each fixture workspace is bound to its own mapped project; the Gas City
+    # catalog is scoped to a project, so each is discovered through its own.
+    runner.prepared_catalog_projects = defaultdict(set)
+    for item in fixtures:
+        runner.prepared_catalog_projects[item["project"]].add(item["agent"]["id"])
     runner.prepared_catalog_ready = not fixtures
     save_json(runner.private / "prepared-fixtures.json", fixtures)
 
@@ -41,20 +46,23 @@ def wait_for_fixture_catalog(runner, *, timeout=660, now=time.monotonic, sleep=t
         return
     from full_e2e_browser_cases import read_json, save_json
     read = read or read_json
-    query = urllib.parse.urlencode({"hostId": runner.manifest["hostId"], "providerId": "gas-city"})
-    url = runner.manifest["bbUrl"] + "/api/v1/system/execution-options?" + query
+    def url(project):
+        query = urllib.parse.urlencode({"hostId": runner.manifest["hostId"], "projectId": project, "providerId": "gas-city"})
+        return runner.manifest["bbUrl"] + "/api/v1/system/execution-options?" + query
     started, last_progress = now(), float("-inf")
     attempts = 0
     while now() - started <= timeout:
-        catalog = read(url)
-        attempts += 1
-        actual = {row.get("id") for row in catalog.get("models", [])}
-        missing = runner.prepared_catalog_ids - actual
-        if not missing and not catalog.get("modelLoadError"):
+        catalogs, missing, failed = {}, set(), False
+        for project, required in sorted(runner.prepared_catalog_projects.items()):
+            catalog = catalogs[project] = read(url(project))
+            attempts += 1
+            missing |= required - {row.get("id") for row in catalog.get("models", [])}
+            failed = failed or bool(catalog.get("modelLoadError"))
+        if not missing and not failed:
             runner.prepared_catalog_ready = True
             save_json(runner.private / "fixture-catalog-ready.json", {
                 "elapsed_seconds": now() - started, "requests": attempts,
-                "required_model_ids": sorted(runner.prepared_catalog_ids), "catalog": catalog,
+                "required_model_ids": sorted(runner.prepared_catalog_ids), "catalogs": catalogs,
                 "cache_modified": False})
             return
         if now() - last_progress >= 15:

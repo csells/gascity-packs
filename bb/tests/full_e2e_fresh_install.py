@@ -48,7 +48,7 @@ def fresh_environment(original, root, directory, bb_port, host_port):
 
 
 def check_gc_read_or_pack_command(args):
-    if tuple(args[:2]) not in {("bb", "install"), ("bb", "connect"), ("bb", "agents"), ("supervisor", "status")}:
+    if tuple(args[:2]) not in {("bb", "install"), ("bb", "connect"), ("bb", "bind"), ("bb", "agents"), ("supervisor", "status")}:
         raise AcceptanceFailure("Fresh BB setup cannot mutate the GC controller lifecycle")
 
 
@@ -143,11 +143,19 @@ def prepare_fresh(runner):
     text_command("gc", "bb", "install", "--yes")
     target = runner.agent("global")
     text_command("gc", "bb", "connect", "--id", target["connection"], "--url", runner.manifest["gcUrl"])
+    # The native picker lists Gas City agents only for a mapped project, so the
+    # fresh store binds the existing global workspace as a user would.
+    workspace = runner.manifest["workspaces"]["global"]
+    project = run("bb", "project", "create", "--name", "Fresh install global", "--root", workspace,
+                  "--host", host, "--json")["id"]
+    text_command("gc", "bb", "bind", "--project", project, "--city", runner.manifest["cityName"],
+                 "--rig", "sample", "--path", workspace)
     catalog = run("gc", "bb", "agents", "--json")
     selected = [agent for agent in catalog["agents"] if all(agent.get(key) == target[key] for key in ("connection", "city", "agent"))]
     if len(selected) != 1: raise AcceptanceFailure("Fresh provider did not discover the exact existing GC agent")
     manifest = {**runner.manifest, "envFile": str(directory / "environment.json"), "bbUrl": env["BB_SERVER_URL"],
-        "appPid": app.pid, "hostId": host, "agents": selected}
+        "appPid": app.pid, "hostId": host, "agents": selected,
+        "nativeProjects": {**runner.manifest.get("nativeProjects", {}), "global": project}}
     manifest.pop("desktopSpec", None)
     new_json(directory / "manifest.json", manifest)
     reports = runner.private / ("installation.fresh-" + secrets.token_hex(5))
@@ -159,10 +167,10 @@ def prepare_fresh(runner):
 def verify_fresh_reply(child, directory, before_gc, read_gc_status):
     marker = "FRESH_INSTALL_" + secrets.token_hex(8)
     prompt = "This is the fresh-install browser acceptance check.\nDo not use tools.\nEnd your final response with exactly this standalone line:\n" + marker
-    agent = child.agent("global")
-    result = child.browser("first-reply", agent, "proj_personal", child.manifest["workspaces"]["global"],
+    agent, project = child.agent("global"), child.manifest["nativeProjects"]["global"]
+    result = child.browser("first-reply", agent, project, child.manifest["workspaces"]["global"],
                            prompt, expected=marker, reasoning="medium")
-    harness = child.new_harness("first-reply", agent, "proj_personal", child.manifest["workspaces"]["global"], result["threadId"])
+    harness = child.new_harness("first-reply", agent, project, child.manifest["workspaces"]["global"], result["threadId"])
     child.verify_turn(harness, result, prompt, marker, no_tools=True)
     after_gc = read_gc_status()
     if (after_gc.get("pid") != before_gc["pid"] or after_gc.get("pid_source") != "control_socket"

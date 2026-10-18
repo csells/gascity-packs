@@ -33,7 +33,7 @@ def native(runner):
             or spec["identity"]["version"] != runner.manifest["versions"]["bb"]):
         raise AcceptanceFailure("Native desktop belongs to a different test installation or release")
     with desktop_journeys(runner, spec_path):
-        result = runner.conversation("desktop.native", "global", project="proj_personal")
+        result = runner.conversation("desktop.native", "global", project=runner.manifest["nativeProjects"]["global"])
         recall = runner.recall("desktop.native-memory", runner.conversations["desktop.native"])
     return {**result, **recall, "turns": 3, "surface": "released-macos-electron",
             "desktop_app_asar_sha256": spec["identity"]["app_asar_sha256"], "instrumentation": spec["instrumentation"]}

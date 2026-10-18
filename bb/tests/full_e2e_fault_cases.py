@@ -80,7 +80,7 @@ class FaultCases:
         self.runner = runner
         self.agent = runner.agent("global")
         self.workspace = runner.manifest["workspaces"]["global"]
-        self.project, self.reasoning = "proj_personal", "none"
+        self.project, self.reasoning = runner.manifest["nativeProjects"]["global"], "none"
         self.city_path = "/v0/city/" + urllib.parse.quote(self.agent["city"], safe="")
         self.cli = Path(runner.env["GC_BB_INSTALL_DIR"]) / "current/dist/cli.js"
         if not self.cli.is_file():

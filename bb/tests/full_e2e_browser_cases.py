@@ -157,6 +157,16 @@ def native_fixture_evidence(runner, fixture, thread, label, frame):
     return evidence
 
 
+def bind_fixture_project(runner, name, workspace):
+    """Give a fixture workspace its own mapped BB project, as a user would with
+    `gc bb bind`; the native picker lists Gas City agents only for mapped projects."""
+    project = runner.bb("project", "create", "--name", name, "--root", str(workspace),
+                        "--host", runner.manifest["hostId"], "--json")["id"]
+    runner.command(runner.manifest["commands"]["gc"], "bb", "bind", "--project", project,
+                   "--city", runner.manifest["cityName"], "--rig", "sample", "--path", str(workspace))
+    return project
+
+
 def fixture(runner, *, trusted=True, configured_mayor=False):
     if hasattr(runner, "prepared_browser_fixtures"):
         from full_e2e_fixture_catalog import browser_fixture
@@ -291,10 +301,11 @@ def create_fixture(runner, *, trusted=True, configured_mayor=False):
         time.sleep(0.5)
     else: raise AcceptanceFailure("GC did not discover the additive browser fixture")
     runner.bb("plugin", "reload", "gas-city", "--json")
+    project = bind_fixture_project(runner, name, workspace)
     target = {"v": 1, "connection": original_agent["connection"], "city": original_agent["city"], "agent": name}
     encoded = base64.urlsafe_b64encode(json.dumps(target, separators=(",", ":")).encode()).decode().rstrip("=")
     row = {"agent": {**target, "id": "gc1_" + encoded, "reasoningLevels": ["none"]},
-           "workspace": str(workspace), "project": "proj_personal", "reasoning": "none", "trusted": trusted if not native else False,
+           "workspace": str(workspace), "project": project, "reasoning": "none", "trusted": trusted if not native else False,
            "nativeConfiguration": native}
     save_json(runner.private / (name + "-fixture.json"), {**row, "runtimeConfig": str(runtime_config) if not native else None, "sourceConfig": str(source_config),
         "originalCitySha256": hashlib.sha256(original).hexdigest()})
@@ -362,9 +373,10 @@ def provider_switch(runner):
     agent, workspace = runner.agent("global"), runner.manifest["workspaces"]["global"]
     marker = "PROVIDER_SWITCH_" + secrets.token_hex(6)
     prompt = f"Without tools, reply with exactly {marker}."
-    result = runner.browser("provider.switch", agent, "proj_personal", workspace, prompt,
+    project = runner.manifest["nativeProjects"]["global"]
+    result = runner.browser("provider.switch", agent, project, workspace, prompt,
         expected=marker, switch_from_provider="Claude Code" if runner.runtime == "codex" else "Codex")
-    harness = runner.new_harness("provider.switch", agent, "proj_personal", workspace, result["threadId"])
+    harness = runner.new_harness("provider.switch", agent, project, workspace, result["threadId"])
     runner.verify_turn(harness, result, prompt, marker, no_tools=True)
     return {"thread_id": result["threadId"], "provider_selected_in_ui": "gas-city"}
 

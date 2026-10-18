@@ -76,7 +76,8 @@ class FaultRoutingTests(unittest.TestCase):
         private.mkdir()
         self.agent = {"v": 1, "connection": "local", "city": "city", "agent": "global", "id": "test-model"}
         self.runner = SimpleNamespace(root=self.root, private=private, env=env,
-            manifest={"gcUrl": "http://127.0.0.1:12345", "workspaces": {"global": str(self.root / "workspace")}},
+            manifest={"gcUrl": "http://127.0.0.1:12345", "workspaces": {"global": str(self.root / "workspace")},
+                      "nativeProjects": {"global": "proj_native_global"}},
             agent=lambda scope: self.agent, command=self.command)
         self.commands = []
 
