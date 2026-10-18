@@ -121,11 +121,10 @@ CLI, and invokes `bb plugin install path:<installed-directory>`. It forwards
 none of these installation steps.
 
 Open the **Gas City** sidebar launcher after binding a standard project below.
-For explicit conversation-only use, launch a personal conversation with a global
-agent from the **Gas City** sidebar. The native picker requires a mapped project.
-A personal conversation uses the agent’s existing GC directory. BB's personal workspace remains
-separate; the conversation shows the GC directory and explains that BB's file
-and diff views do not track it.
+Both the launcher and BB's native picker require a mapped standard project;
+BB's personal project lists no Gas City agents and cannot host a Gas City
+conversation. The launcher lists the mapped city’s global agents alongside
+its rig agents.
 Select **Full access**: this is the bridge's supported BB permission mode;
 the agent's existing Gas City permission policy still applies. GC tmux
 approval requests are shown as explicit BB questions offering **Approve once**
@@ -180,9 +179,7 @@ agent into BB's newly created worktree.
   describe changes made in GC's different checkout.
 - `require-match` (default) blocks project prompt submission unless the real BB
   and GC working directories match. Use a matching unmanaged BB environment
-  for project work. Personal conversations with global agents use the GC-owned
-  directory and display the same workspace notice; BB requires these threads
-  to keep its separate personal workspace.
+  for project work.
 
 Set the policy while configuring a connection:
 
