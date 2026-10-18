@@ -45,8 +45,13 @@ class NativeBrowserFixtureTests(unittest.TestCase):
     def make_fixture(self, **options):
         with patch("full_e2e_browser_cases.shutil.which", return_value=str(self.binary)), patch(
                 "full_e2e_browser_cases.read_json", side_effect=lambda _: {"agents": [
-                    {"name": path.name} for path in (self.city / "agents").iterdir()]}):
-            return fixture(self.runner, **options)
+                    {"name": path.name} for path in (self.city / "agents").iterdir()]}), patch(
+                "full_e2e_browser_cases.bind_fixture_project", return_value="proj_native_fixture") as bind:
+            row = fixture(self.runner, **options)
+        bind.assert_called_once()
+        self.assertEqual(Path(bind.call_args.args[2]), Path(row["workspace"]))
+        self.assertEqual(row["project"], "proj_native_fixture")
+        return row
 
     def test_native_fixture_observes_actual_transcripts_without_seeding_inactive_trust(self):
         result = self.make_fixture(trusted=True)

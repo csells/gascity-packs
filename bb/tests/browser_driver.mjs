@@ -242,14 +242,14 @@ function options(argv) {
   values.project ??= 'proj_personal'; values.reasoning ??= 'none';
   assert.ok(['native', 'launcher'].includes(values.route), 'Unsupported route');
   assert.ok(['send', 'queue', 'wait', 'approve', 'deny', 'interrupt'].includes(values.action), 'Unsupported action');
-  assert.ok(['ready', 'submitted', 'completed', 'rejected'].includes(values.until), 'Unsupported --until');
+  assert.ok(['ready', 'submitted', 'completed', 'rejected', 'no-models'].includes(values.until), 'Unsupported --until');
   assert.ok(['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(values.reasoning), 'Unsupported reasoning');
   values.timeout = Number(values['timeout-ms'] ?? 240000);
   assert.ok(Number.isFinite(values.timeout) && values.timeout > 0, 'Invalid --timeout-ms');
   if (values.action !== 'send') assert.ok(values['existing-thread-id'], `${values.action} needs --existing-thread-id`);
   if (values.action === 'send') {
     assert.ok(values.model, 'Missing --model');
-    if (values.until !== 'ready') assert.ok(values.prompt?.trim(), 'Missing --prompt');
+    if (!['ready', 'no-models'].includes(values.until)) assert.ok(values.prompt?.trim(), 'Missing --prompt');
   }
   if (values.action === 'queue') {
     assert.ok(values.prompt?.trim(), 'Queue requires --prompt');
@@ -259,6 +259,7 @@ function options(argv) {
   if (values.until === 'rejected') {
     assert.ok(values.route === 'launcher' && values.action === 'send' && !values['existing-thread-id'] && values['expected-error'], 'Rejected launch requires a new launcher request with --expected-error');
   } else if (values['expected-error']) assert.ok(values['existing-thread-id'], 'A negative send case requires an existing test thread');
+  if (values.until === 'no-models') assert.ok(values.route === 'native' && values.action === 'send' && !values['existing-thread-id'] && !values.prompt, 'An empty-catalog check opens native New thread without sending');
   if (values['switch-from-provider']) assert.ok(!values['existing-thread-id'], 'Provider switching is a New thread control; an existing BB conversation keeps its provider');
   if (!values['existing-thread-id'] && (values.route === 'launcher' || values.project !== 'proj_personal')) assert.ok(values.workspace, 'This route requires --workspace');
   if (!values['existing-thread-id'] && values.route === 'launcher') assert.notEqual(values.project, 'proj_personal', 'The Gas City launcher requires a standard BB project; use native New thread for personal conversations');
@@ -282,6 +283,7 @@ export async function runBrowser(argv = process.argv.slice(2), surface = null) {
   const listen = (event, listener) => { page.on(event, listener); listeners.push([event, listener]); };
   const pendingEvidence = new Set();
   const catalogs = [];
+  const gasCityCatalogs = [];
   try {
     if (surface) {
       ({ context, page } = surface);
@@ -305,7 +307,10 @@ export async function runBrowser(argv = process.argv.slice(2), surface = null) {
         const row = { at: new Date().toISOString(), method: request.method(), url: response.url(), status: response.status(), request: request.postData() };
         result.requests.push(row);
         try { row.response = await bounded(response.json(), 10000, 'Response evidence capture'); } catch (error) { row.responseReadError = String(error); }
-        if (request.method() === 'GET' && row.response?.models) catalogs.push(row.response);
+        if (request.method() === 'GET' && row.response?.models) {
+          catalogs.push(row.response);
+          if (url.searchParams.get('providerId') === 'gas-city') gasCityCatalogs.push({ url: response.url(), models: row.response.models.length });
+        }
       })();
       pendingEvidence.add(operation); operation.finally(() => pendingEvidence.delete(operation));
     });
@@ -368,28 +373,45 @@ export async function runBrowser(argv = process.argv.slice(2), surface = null) {
         step('switched to the requested prior provider', { provider: args['switch-from-provider'] });
       }
       if (!args['existing-thread-id']) await picker.getByTitle('Gas City', { exact: true }).click();
-      const deadline = Date.now() + Math.min(args.timeout, 30000);
-      let model;
-      while (Date.now() < deadline) {
-        model = catalogs.flatMap(catalog => catalog.models).find(row => row.id === args.model || row.model === args.model);
-        if (model) break;
-        if (await picker.getByText('Could not load models for Gas City.', { exact: true }).isVisible()) throw new Error('Native Gas City model catalog failed to load');
-        await page.waitForTimeout(100);
+      if (args.until === 'no-models') {
+        // Documented contract: the native picker lists Gas City agents only
+        // for a mapped project; BB's personal project stays projectless.
+        await picker.getByText('No models available', { exact: true }).waitFor({ state: 'visible' });
+        const listed = gasCityCatalogs.filter(row => new URL(row.url).searchParams.get('hostId') === args.host);
+        assert.ok(listed.length, 'BB never requested the Gas City catalog for this host');
+        assert.ok(listed.every(row => row.models === 0), 'Gas City listed models in a projectless native picker');
+        result.gasCityCatalogs = listed;
+        await page.screenshot({ path: join(artifacts, 'selection.png'), fullPage: true });
+        result.status = 'no-models';
+        step('native picker shows no Gas City agents for the projectless personal project');
       }
-      assert.ok(model, 'Requested model is absent from the actual BB catalog');
-      // BB title-cases model display names; the chosen event must still carry the exact ID.
-      const selectedModel = { name: exactIgnoringCase(model.displayName) };
-      // BB uses a searchable list for larger catalogs and direct buttons for
-      // smaller ones, such as the globals on an existing personal thread.
-      await picker.getByRole('option', selectedModel).or(picker.getByRole('button', selectedModel)).click();
-      if (!await picker.isVisible()) await page.getByRole('button', { name: /^Provider, model and reasoning/ }).click();
-      const reasoningLabels = { none: 'Agent default', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra High', max: 'Max' };
-      await page.getByRole('dialog').getByRole('radio', { name: reasoningLabels[args.reasoning], exact: true }).check();
-      await page.keyboard.press('Escape');
-      step('selected native Gas City model and reasoning', { modelLabel: model.displayName, reasoning: args.reasoning });
+      if (args.until !== 'no-models') {
+        const deadline = Date.now() + Math.min(args.timeout, 30000);
+        let model;
+        while (Date.now() < deadline) {
+          model = catalogs.flatMap(catalog => catalog.models).find(row => row.id === args.model || row.model === args.model);
+          if (model) break;
+          if (await picker.getByText('Could not load models for Gas City.', { exact: true }).isVisible()) throw new Error('Native Gas City model catalog failed to load');
+          await page.waitForTimeout(100);
+        }
+        assert.ok(model, 'Requested model is absent from the actual BB catalog');
+        // BB title-cases model display names; the chosen event must still carry the exact ID.
+        const selectedModel = { name: exactIgnoringCase(model.displayName) };
+        // BB uses a searchable list for larger catalogs and direct buttons for
+        // smaller ones, such as the globals on an existing personal thread.
+        await picker.getByRole('option', selectedModel).or(picker.getByRole('button', selectedModel)).click();
+        if (!await picker.isVisible()) await page.getByRole('button', { name: /^Provider, model and reasoning/ }).click();
+        const reasoningLabels = { none: 'Agent default', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra High', max: 'Max' };
+        await page.getByRole('dialog').getByRole('radio', { name: reasoningLabels[args.reasoning], exact: true }).check();
+        await page.keyboard.press('Escape');
+        step('selected native Gas City model and reasoning', { modelLabel: model.displayName, reasoning: args.reasoning });
+      }
     }
-    await page.screenshot({ path: join(artifacts, 'selection.png'), fullPage: true });
-    if (args.until === 'ready') result.status = 'ready';
+    // An empty-catalog check captured its evidence with the picker open.
+    if (args.until !== 'no-models') await page.screenshot({ path: join(artifacts, 'selection.png'), fullPage: true });
+    if (args.until === 'no-models') {
+      // Nothing is selected or sent.
+    } else if (args.until === 'ready') result.status = 'ready';
     else if (args.until === 'rejected') {
       await page.getByRole('button', { name: 'Start conversation', exact: true }).click();
       const deadline = Date.now() + args.timeout;

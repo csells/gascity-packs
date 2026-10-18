@@ -19,7 +19,7 @@ class FixtureCatalogTests(unittest.TestCase):
     def test_prepare_keeps_approval_and_fresh_trust_fixtures_distinct_and_unstarted(self):
         made = []
         def create(_runner, **options):
-            item = {"agent": {"id": "fixture-" + str(len(made))}, "options": options}
+            item = {"agent": {"id": "fixture-" + str(len(made))}, "project": "proj_fixture_" + str(len(made)), "options": options}
             made.append(item)
             return item
         with patch("full_e2e_browser_cases.create_fixture", side_effect=create), \
@@ -30,6 +30,8 @@ class FixtureCatalogTests(unittest.TestCase):
             wait.assert_not_called()
             self.assertEqual(len(made), 6)
             self.assertEqual(len(self.runner.prepared_catalog_ids), 6)
+            self.assertEqual({project: sorted(ids) for project, ids in self.runner.prepared_catalog_projects.items()},
+                             {"proj_fixture_" + str(n): ["fixture-" + str(n)] for n in range(6)})
             permissions = [browser_fixture(self.runner, (True, False)) for _ in range(4)]
             self.assertEqual(len({item["agent"]["id"] for item in permissions}), 4)
             fresh = browser_fixture(self.runner, (False, False))
@@ -40,6 +42,7 @@ class FixtureCatalogTests(unittest.TestCase):
     def test_wait_observes_stale_then_fresh_public_catalog_without_mutation(self):
         self.runner.prepared_catalog_ready = False
         self.runner.prepared_catalog_ids = {"new-a", "new-b"}
+        self.runner.prepared_catalog_projects = {"proj_mapped": {"new-a", "new-b"}}
         elapsed, urls = [0], []
         def read(url):
             urls.append(url)
@@ -48,11 +51,25 @@ class FixtureCatalogTests(unittest.TestCase):
         wait_for_fixture_catalog(self.runner, read=read, now=lambda: elapsed[0],
                                  sleep=lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds))
         self.assertEqual(len(urls), 2)
-        self.assertTrue(all(url.endswith("hostId=actual-host&providerId=gas-city") for url in urls))
+        self.assertTrue(all(url.endswith("hostId=actual-host&projectId=proj_mapped&providerId=gas-city") for url in urls))
         evidence = json.loads((self.runner.private / "fixture-catalog-ready.json").read_text())
         self.assertFalse(evidence["cache_modified"])
         self.assertEqual(evidence["required_model_ids"], ["new-a", "new-b"])
         wait_for_fixture_catalog(self.runner, read=lambda _: self.fail("ready catalog re-read"))
+
+    def test_each_fixture_must_appear_in_its_own_mapped_project_catalog(self):
+        self.runner.prepared_catalog_ready = False
+        self.runner.prepared_catalog_ids = {"a", "b"}
+        self.runner.prepared_catalog_projects = {"proj_a": {"a"}, "proj_b": {"b"}}
+        elapsed = [0]
+        # Each project lists only the other fixture: never ready.
+        read = lambda url: {"models": [{"id": "b" if "projectId=proj_a" in url else "a"}]}
+        with self.assertRaises(AcceptanceFailure):
+            wait_for_fixture_catalog(self.runner, timeout=3, read=read, now=lambda: elapsed[0],
+                                     sleep=lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds))
+        read = lambda url: {"models": [{"id": "a" if "projectId=proj_a" in url else "b"}]}
+        wait_for_fixture_catalog(self.runner, timeout=3, read=read, now=lambda: elapsed[0], sleep=lambda _: None)
+        self.assertTrue(self.runner.prepared_catalog_ready)
 
     def test_missing_model_or_failed_catalog_cannot_satisfy_wait_and_timeout_is_bounded(self):
         for catalog in ({"models": [{"id": "other"}]},
@@ -60,6 +77,7 @@ class FixtureCatalogTests(unittest.TestCase):
             with self.subTest(catalog=catalog):
                 self.runner.prepared_catalog_ready = False
                 self.runner.prepared_catalog_ids = {"required"}
+                self.runner.prepared_catalog_projects = {"proj_mapped": {"required"}}
                 elapsed = [0]
                 with self.assertRaises(AcceptanceFailure):
                     wait_for_fixture_catalog(self.runner, timeout=3, read=lambda _: catalog,

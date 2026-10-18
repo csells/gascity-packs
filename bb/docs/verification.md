@@ -114,6 +114,14 @@ requires every case in `bb/tests/e2e_matrix.py`. A diagnostic subset always
 leaves the overall report incomplete. Missing credentials, timeouts, skipped
 cases and absent implementations cannot count as passes.
 
+The matrix follows the pack's documented project contract: the native New
+thread picker lists Gas City agents only for a project bound with `gc bb bind`,
+and BB's personal project stays projectless. `native.personal` asserts that
+empty personal picker and then holds its conversation with the global agent
+through the Gas City sidebar launcher; cases that drive the native picker use
+mapped projects, and each additive fixture workspace is bound to its own
+project.
+
 Install the locked browser driver dependencies once:
 
 ```sh

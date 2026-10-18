@@ -50,7 +50,8 @@ class InteractionCases:
             "f=p.open('x'); f.write('started\\n'); f.close(); time.sleep(90)")
         prompt = ('Remember the private word ' + nonce + '. Run exactly this shell command once and wait for it. '
                   'Do not run any other tools.\n' + command + '\nThen reply exactly ' + marker + '.')
-        start = r.browser(label + '-start', agent, 'proj_personal', workspace, prompt, until='submitted')
+        project = r.manifest['nativeProjects']['global']
+        start = r.browser(label + '-start', agent, project, workspace, prompt, until='submitted')
         thread = start['threadId']
         def running():
             try: value = receipt(r, thread)
@@ -63,7 +64,7 @@ class InteractionCases:
                 return value, frame
         value, frame = self.waiter.poll(label + ' busy tool', running)
         save_json(r.private / (label + '-busy.json'), {'receipt': value, 'frame': frame})
-        return {'agent': agent, 'project': 'proj_personal', 'workspace': workspace, 'reasoning': 'medium',
+        return {'agent': agent, 'project': project, 'workspace': workspace, 'reasoning': 'medium',
                 'thread': thread, 'start': start, 'prompt': prompt, 'marker': marker,
                 'receipt': value, 'frame': frame, 'memory': nonce}
 

@@ -124,8 +124,12 @@ class ErrorFixtureGuards(unittest.TestCase):
                 def __init__(self, _): pass
                 def poll(self, _, probe): return probe()
             with patch("full_e2e_error_cases.FaultCases", Waiter), patch("full_e2e_error_cases.read_json",
-                    side_effect=lambda _: {"agents": [{"name": p.name} for p in (city / "agents").iterdir()]}):
+                    side_effect=lambda _: {"agents": [{"name": p.name} for p in (city / "agents").iterdir()]}), \
+                    patch("full_e2e_browser_cases.bind_fixture_project", return_value="proj_error_fixture") as bind:
                 fixture = error_fixture(runner, "provider")
+            bind.assert_called_once()
+            self.assertEqual(Path(bind.call_args.args[2]), Path(fixture["workspace"]))
+            self.assertEqual(fixture["project"], "proj_error_fixture")
             workspace = Path(fixture["workspace"])
             (workspace / ".codex").mkdir()
             (workspace / ".codex/hooks.json").write_text(json.dumps(expected_hooks(CURRENT_HOOK_SET)))
@@ -174,8 +178,12 @@ class ErrorFixtureGuards(unittest.TestCase):
                 def __init__(self, _): pass
                 def poll(self, _, probe): return probe()
             with patch("full_e2e_error_cases.FaultCases", Waiter), patch("full_e2e_error_cases.read_json",
-                    side_effect=lambda _: {"agents": [{"name": p.name} for p in (city / "agents").iterdir()]}):
+                    side_effect=lambda _: {"agents": [{"name": p.name} for p in (city / "agents").iterdir()]}), \
+                    patch("full_e2e_browser_cases.bind_fixture_project", return_value="proj_error_fixture") as bind:
                 fixture = error_fixture(runner, "provider")
+            bind.assert_called_once()
+            self.assertEqual(Path(bind.call_args.args[2]), Path(fixture["workspace"]))
+            self.assertEqual(fixture["project"], "proj_error_fixture")
             runtime = Path(fixture["launchLog"]).parent / "runtime"
             result = json.loads(subprocess.check_output([str(runtime)], env=env, cwd=fixture["workspace"], text=True))
             self.assertEqual(result["CLAUDE_CONFIG_DIR"], fixture["runtimeConfig"])

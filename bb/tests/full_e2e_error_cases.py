@@ -192,10 +192,12 @@ verify_launch(Path.cwd(), {str(runtime_config)!r}, [{str(workspace)!r}], os.envi
     waiter.poll("new error fixture", lambda: any(row.get("name") == name for row in
         read_json(runner.manifest["gcUrl"] + f"/v0/city/{original_agent['city']}/config").get("agents", [])))
     runner.bb("plugin", "reload", "gas-city", "--json")
+    from full_e2e_browser_cases import bind_fixture_project
+    project = bind_fixture_project(runner, name, workspace)
     target = {"v": 1, "connection": original_agent["connection"], "city": original_agent["city"], "agent": name}
     encoded = base64.urlsafe_b64encode(json.dumps(target, separators=(",", ":")).encode()).decode().rstrip("=")
     fixture = {"agent": {**target, "id": "gc1_" + encoded, "reasoningLevels": ["none"]},
-               "workspace": str(workspace), "launchLog": str(log), "runtimeConfig": str(runtime_config),
+               "workspace": str(workspace), "project": project, "launchLog": str(log), "runtimeConfig": str(runtime_config),
                "runtimeArtifact": artifact}
     save_json(runner.private / (name + "-fixture.json"), fixture)
     return fixture
@@ -207,7 +209,7 @@ def error_case(runner, mode):
     fixture = None
     if mode != "timeout":
         fixture = error_fixture(runner, mode)
-        cases.agent, cases.workspace = fixture["agent"], fixture["workspace"]
+        cases.agent, cases.workspace, cases.project = fixture["agent"], fixture["workspace"], fixture["project"]
     prompt = "Do not use tools. Reply exactly ERROR_CASE_UNEXPECTED_SUCCESS_" + secrets.token_hex(12)
     with cases.routed(label) as (proxy, artifacts):
         ticket = proxy.arm("create", path=cases.city_path + "/sessions", hold=True) if mode == "timeout" else None

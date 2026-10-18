@@ -303,9 +303,20 @@ class Runner:
         else: raise AcceptanceFailure("GC never settled the suspended agent")
         return self.recall(label, c)
 
+    def personal_contract(self):
+        """BB's personal project stays projectless (bb/README.md): its native New
+        thread lists no Gas City agents, and a conversation with a global agent
+        starts from the Gas City sidebar launcher of a mapped project. Later
+        lifecycle cases continue this launcher conversation."""
+        agent, workspace = self.agent("global"), self.manifest["workspaces"]["global"]
+        picker = self.browser("native.personal-picker", agent, "proj_personal", workspace, until="no-models")
+        result = self.conversation("native.personal", "global", project=self.manifest["projectId"], route="launcher")
+        return {**result, "personal_native_picker": "no Gas City models",
+                "gas_city_catalogs": picker["gasCityCatalogs"], "conversation_route": "launcher"}
+
     def reasoning_case(self, level):
         label = "reasoning." + level
-        result = self.conversation(label, "global", project="proj_personal", reasoning=level)
+        result = self.conversation(label, "global", project=self.manifest["nativeProjects"]["global"], reasoning=level)
         self.agent_resume(self.conversations[label], label + "-resumed")
         return {**result, "reasoning": level, "resumed_with_same_reasoning": True}
 
@@ -321,7 +332,7 @@ class Runner:
         from full_e2e_fresh_install import case_functions as fresh_install_cases
         from e2e_matrix import required_cases
         cases = {
-            "native.personal": lambda: self.conversation("native.personal", "global", project="proj_personal"),
+            "native.personal": self.personal_contract,
             "native.project_global": lambda: self.conversation("native.project_global", "global", project=self.manifest["nativeProjects"]["global"]),
             "native.project_rig": lambda: self.conversation("native.project_rig", "rig", project=self.manifest["nativeProjects"]["rig"]),
             "launcher.global": lambda: self.conversation("launcher.global", "global", project=self.manifest["projectId"], route="launcher"),
