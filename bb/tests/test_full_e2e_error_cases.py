@@ -96,7 +96,7 @@ class ErrorFixtureGuards(unittest.TestCase):
         self.assertTrue(all(callable(case) for case in cases.values()))
 
     def test_codex_fixture_uses_only_new_invalid_credentials_and_preserves_old_config(self):
-        from codex_hook_trust import expected_hooks
+        from codex_hook_trust import CURRENT_HOOK_SET, expected_hooks
         with tempfile.TemporaryDirectory(prefix="bb-live-", dir="/var/tmp") as scratch:
             root = Path(scratch).resolve()
             (root / ".bb-full-e2e-owned.json").write_text(json.dumps({"root": str(root)}))
@@ -115,7 +115,7 @@ class ErrorFixtureGuards(unittest.TestCase):
                        ANTHROPIC_API_KEY="existing-other-key", CLAUDE_CODE_OAUTH_TOKEN="existing-oauth")
             calls = []
             runner = SimpleNamespace(root=root, private=private, runtime="codex", env=env,
-                manifest={"versions": {"codex": "codex-cli 0.153.4"}, "gcUrl": "http://127.0.0.1:1"},
+                manifest={"versions": {"codex": "codex-cli 0.153.4"}, "gcUrl": "http://127.0.0.1:1", "codexHookSet": CURRENT_HOOK_SET},
                 agent=lambda scope: {"connection": "local", "city": "city", "agent": "original"},
                 command=lambda *args: subprocess.check_output(args, env=env, text=True),
                 bb=lambda *args: calls.append(args))
@@ -128,7 +128,7 @@ class ErrorFixtureGuards(unittest.TestCase):
                 fixture = error_fixture(runner, "provider")
             workspace = Path(fixture["workspace"])
             (workspace / ".codex").mkdir()
-            (workspace / ".codex/hooks.json").write_text(json.dumps(expected_hooks()))
+            (workspace / ".codex/hooks.json").write_text(json.dumps(expected_hooks(CURRENT_HOOK_SET)))
             runtime = Path(fixture["launchLog"]).parent / "runtime"
             child_env = json.loads(subprocess.check_output([str(runtime)], env=env, cwd=workspace, text=True))
             self.assertEqual(child_env["CODEX_HOME"], fixture["runtimeConfig"])

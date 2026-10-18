@@ -127,7 +127,7 @@ def create_error_fixture(runner, mode):
         with (runtime_config / "config.toml").open("x") as stream:
             stream.write('cli_auth_credentials_store = "file"\n')
             stream.write(f'[projects.{json.dumps(str(workspace))}]\ntrust_level = "trusted"\n')
-            stream.write(trust_config([workspace], runner.manifest["versions"]["codex"]))
+            stream.write(trust_config([workspace], runner.manifest["versions"]["codex"], runner.manifest["codexHookSet"]))
     else:
         save_json(runtime_config / ".claude.json", {"hasCompletedOnboarding": True, "theme": "dark",
             "projects": {str(workspace): {"hasTrustDialogAccepted": True,
@@ -156,7 +156,7 @@ os.environ[{("OPENAI_API_KEY" if runner.runtime == "codex" else "CLAUDE_CODE_OAU
     if runner.runtime == "codex":
         code += f'''sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})
 from codex_hook_trust import verify_launch
-verify_launch(Path.cwd(), {str(runtime_config)!r}, [{str(workspace)!r}], os.environ)
+verify_launch(Path.cwd(), {str(runtime_config)!r}, [{str(workspace)!r}], os.environ, {runner.manifest["codexHookSet"]!r})
 '''
     code += f'os.execv({binary!r}, [{binary!r}, *sys.argv[1:]])\n'
     with script.open("x") as stream: stream.write(code)

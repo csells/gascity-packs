@@ -21,7 +21,7 @@ import tempfile
 import threading
 import time
 
-from codex_hook_trust import trust_config, write_provider_commands
+from codex_hook_trust import hook_set_for, trust_config, write_provider_commands
 from native_claude_acceptance import prepare_native_claude, native_memory_provenance
 from runtime_artifact import runtime_artifact, require_claude_session_id
 
@@ -298,6 +298,11 @@ def main():
         with Path(commands["gc"]).open("rb") as stream:
             report["gcBinarySha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
         report["coreRelease"] = core_release
+        # The reviewed hook text GC writes is chosen by the binary under test,
+        # not by the core pin: released cores, or current main for development.
+        codex_hook_set = hook_set_for(gc_version, CORE_COMMITS)
+        if args.runtime == "codex":
+            report["codexHookSet"] = codex_hook_set
         report["versions"] = {"gc": gc_version,
                               "bb": run("bb", "--version").stdout.strip(),
                               args.runtime: run(args.runtime, "--version").stdout.strip()}
@@ -319,7 +324,7 @@ def main():
             for workspace in workspaces.values():
                 stream.write(f'[projects.{json.dumps(str(workspace))}]\ntrust_level = "trusted"\n')
             if args.runtime == "codex":
-                stream.write(trust_config(workspaces.values(), report["versions"]["codex"]))
+                stream.write(trust_config(workspaces.values(), report["versions"]["codex"], codex_hook_set))
         # GC starts an interactive shell, which may replace PATH. Pin the
         # executable whose version we checked, including an authorized wrapper.
         runtime_binary = shutil.which(args.runtime, path=env["PATH"])
@@ -330,7 +335,7 @@ def main():
             runtime_command += 'session_id_flag = "--session-id"\n'
         if args.runtime == "codex":
             runtime_command = write_provider_commands(root, shutil.which("codex", path=env["PATH"]),
-                                                      env["CODEX_HOME"], workspaces.values())
+                                                      env["CODEX_HOME"], workspaces.values(), codex_hook_set)
         (city / ".gc").mkdir()
         (root / "gc-home").mkdir()
         (root / "gc-home/supervisor.toml").write_text(
@@ -423,6 +428,7 @@ def main():
                 "gcCommit": args.gc_commit or RELEASE_COMMITS.get(core_release, CORE_COMMITS[core_release]),
                 **({"modelRoute": args.model_route} if args.model_route else {}),
                 "verificationMode": report["verificationMode"], "appPid": app_process.pid,
+                "codexHookSet": codex_hook_set,
             })
             prepared = True
             report["status"] = "prepared"

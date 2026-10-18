@@ -57,19 +57,19 @@ class PackIntegration(unittest.TestCase):
         self.assertNotEqual(result.returncode,0)
         self.assertIn('gc bb install',result.stderr+result.stdout)
     def test_codex_acceptance_wrapper_resolves_and_executes_start_and_resume(self):
-        from codex_hook_trust import expected_hooks, write_provider_commands
+        from codex_hook_trust import CURRENT_HOOK_SET, expected_hooks, write_provider_commands
         with tempfile.TemporaryDirectory(prefix="bb-codex-launch-") as directory:
             root = Path(directory)
             workspace, home = root / "workspace", root / "codex-home"
             (workspace / ".gc").mkdir(parents=True)
             (workspace / ".codex").mkdir()
             home.mkdir()
-            (workspace / ".codex/hooks.json").write_text(json.dumps(expected_hooks()))
+            (workspace / ".codex/hooks.json").write_text(json.dumps(expected_hooks(CURRENT_HOOK_SET)))
             (workspace / "pack.toml").write_text('[pack]\nname = "codex-launch-test"\nschema = 2\n')
             fake = root / "fake-codex"
             fake.write_text('#!' + sys.executable + '\nimport json, os, sys\nprint(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "home": os.environ["CODEX_HOME"]}))\n')
             fake.chmod(0o700)
-            commands = write_provider_commands(root, fake, home, [workspace])
+            commands = write_provider_commands(root, fake, home, [workspace], CURRENT_HOOK_SET)
             (workspace / "city.toml").write_text('[workspace]\nname = "codex-launch-test"\nprovider = "codex"\n[providers.codex]\nbase = "builtin:codex"\n' + commands)
             env = {**self.env, "CODEX_HOME": str(home)}
             def gc(*args):
@@ -92,7 +92,7 @@ class PackIntegration(unittest.TestCase):
                 self.assertEqual(launched.returncode, 0, launched.stderr)
                 actual = json.loads(launched.stdout)
                 self.assertEqual(actual, {"args": invocation[1:] + extra, "cwd": str(workspace.resolve()), "home": str(home)})
-            changed_hooks = expected_hooks()
+            changed_hooks = expected_hooks(CURRENT_HOOK_SET)
             changed_hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"] += " && unexpected-command"
             (workspace / ".codex/hooks.json").write_text(json.dumps(changed_hooks))
             blocked = subprocess.run([resolved["command"]], cwd=workspace, env=env, text=True, capture_output=True, timeout=10)

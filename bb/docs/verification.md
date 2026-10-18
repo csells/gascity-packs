@@ -75,8 +75,12 @@ after the harness stops its own services.
 Codex also requires trust for hook definitions, separately from workspace
 trust. The acceptance harness seeds native trust for exactly four reviewed GC
 hooks in its fresh configuration and verifies their definitions before launch.
-Changed or additional hooks retain normal review requirements. This setup is
-confined to the test harness; it does not change the pack's permission policy.
+`bb/tests/codex_hook_trust.py` keeps one reviewed set per GC hook generation
+(released 1.5.0, and current main since GC #6579) and documents how each trust
+digest is derived from Codex 0.153.4's hook hash; a released GC selects the
+released set and a declared development build the current one. Changed or
+additional hooks retain normal review requirements. This setup is confined to
+the test harness; it does not change the pack's permission policy.
 
 For repeated local checks, keep one isolated GC/BB environment running and call
 `bb/tests/live_assertions.py` with its explicit host, project, agent, workspace

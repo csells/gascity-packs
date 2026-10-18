@@ -220,14 +220,14 @@ def create_fixture(runner, *, trusted=True, configured_mayor=False):
         from codex_hook_trust import trust_config
         with (runtime_config / "config.toml").open("a") as stream:
             stream.write(f'\n[projects.{json.dumps(str(workspace))}]\ntrust_level = "trusted"\n')
-            stream.write(trust_config([workspace], runner.manifest["versions"]["codex"]))
+            stream.write(trust_config([workspace], runner.manifest["versions"]["codex"], runner.manifest["codexHookSet"]))
     binary = shutil.which(runner.runtime, path=runner.env["PATH"])
     if not binary: raise AcceptanceFailure("The selected runtime executable is unavailable")
     if runner.command(binary, "--version").strip() != runner.manifest["versions"][runner.runtime]:
         raise AcceptanceFailure("Permission fixture runtime differs from the artifact under test")
     if runner.runtime == "codex":
         from codex_hook_trust import write_provider_commands
-        write_provider_commands(location, binary, runtime_config, [workspace])
+        write_provider_commands(location, binary, runtime_config, [workspace], runner.manifest["codexHookSet"])
         binary = str(location / "codex-verified")
     elif source_provider.get("command"):
         # A prepared Claude provider may load authorized API credentials from
