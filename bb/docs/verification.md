@@ -281,12 +281,12 @@ can contain credentials and must not be uploaded. The workflow uploads only
 those three explicitly named reports.
 
 For an explicit GC development build, add `--gc-development-base 1.5.0` and
-`--gc-commit <full source commit>`, and use a binary reporting a prerelease
-version such as `1.5.0-candidate.002016a8679a`. Historical 1.5 development builds used this override; the harness then imports the
-canonical `core` pin that 1.5's `gc init` writes.
-Reports identify this as development validation and record the binary hash;
-it does not certify the unchanged released binaries. The separate GC candidate
-CI job uses this flag; the stock release jobs do not.
+`--gc-commit <full source commit>`. The binary keeps its own version stamp, for
+example `1.6.0-dev.d0835cd45`; only a released version string is refused. The
+harness then imports the canonical `core` pin that 1.5's `gc init` writes.
+Reports identify this as development validation and record the actual version
+and binary hash; it does not certify the unchanged released binaries. The
+separate GC candidate CI job uses this flag; the stock release jobs do not.
 
 ## Full product gate
 
