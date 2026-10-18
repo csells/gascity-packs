@@ -348,7 +348,9 @@ class LifecycleCases:
     def bridge_busy(self):
         label = "lifecycle.bridge_busy_crash"
         artifacts, c = self.evidence_dir(label), self.conversation()
+        # The recovery checks observe this exact conversation, wherever it lives.
         self.fault.agent, self.fault.reasoning = c["agent"], c["reasoning"]
+        self.fault.project, self.fault.workspace = c["project"], c["workspace"]
         nonce, memory = secrets.token_hex(6), secrets.token_hex(12)
         marker = "BUSY_FINISHED_" + nonce
         prompt = (f"Remember the private word {memory}. Use your shell tool to run sleep 20, waiting for it to finish. "
