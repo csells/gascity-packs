@@ -159,11 +159,15 @@ def native_fixture_evidence(runner, fixture, thread, label, frame):
 
 def bind_fixture_project(runner, name, workspace):
     """Give a fixture workspace its own mapped BB project, as a user would with
-    `gc bb bind`; the native picker lists Gas City agents only for mapped projects."""
+    `gc bb bind`; the native picker lists Gas City agents only for mapped projects.
+
+    The binding is city-scoped (no --rig): GC also expands an agent added to the
+    city's agents/ directory into each rig, and a rig binding lists that rig
+    copy (sample/<name>) instead of the city agent the fixture defines."""
     project = runner.bb("project", "create", "--name", name, "--root", str(workspace),
                         "--host", runner.manifest["hostId"], "--json")["id"]
     runner.command(runner.manifest["commands"]["gc"], "bb", "bind", "--project", project,
-                   "--city", runner.manifest["cityName"], "--rig", "sample", "--path", str(workspace))
+                   "--city", runner.manifest["cityName"], "--path", str(workspace))
     return project
 
 
