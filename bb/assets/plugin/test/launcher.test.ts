@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fixture } from "./fixture.js";
 import { createLauncherHostHandlers } from "../src/launcher-host.js";
-import { launcherContract } from "../src/launcher-contract.js";
+import { launcherContract, launcherHostContract } from "../src/launcher-contract.js";
 
 test("launcher validates the exact mapped agent and existing workspace before launch", async () => {
   const f = await fixture();
@@ -14,7 +14,8 @@ test("launcher validates the exact mapped agent and existing workspace before la
     assert.ok(agent);
     assert.equal(agent.workspacePath, await (await import("node:fs/promises")).realpath(f.cwd));
     assert.deepEqual(await host.validate({ projectId: "project-web", model: agent.id, workspacePath: f.cwd }, context), { model: agent.id, workspacePath: agent.workspacePath, reasoningLevel: "none" });
-    await assert.rejects(host.validate({ projectId: null, model: agent.id, workspacePath: f.cwd }, context), /unavailable|outside/);
+    assert.equal(launcherHostContract.validate.input.safeParse({ projectId: null, model: agent.id, workspacePath: f.cwd }).success, false);
+    await assert.rejects(host.validate({ projectId: "project-unmapped", model: agent.id, workspacePath: f.cwd }, context), /not mapped/);
     assert.equal(f.calls.filter(c => c.method === "POST").length, 0);
   } finally { await f.close(); }
 });
@@ -59,7 +60,8 @@ test("server launch pins explicit Gas City selection and revalidates on the chos
   const failure = await handlers.launch({ hostId: "missing", projectId: "project-web", model: "exact-agent", workspacePath: "/existing/rig", prompt: "Review this" });
   assert.equal(failure.uncertain, false);
   assert.match(failure.error, /host.*unavailable/i);
-  const personal = await handlers.launch({ hostId: "host-a", projectId: null, model: "exact-agent", workspacePath: "/existing/rig", prompt: "Review this" });
+  assert.equal(launcherContract.launch.input.safeParse({ hostId: "host-a", projectId: null, model: "exact-agent", workspacePath: "/existing/rig", prompt: "Review this" }).success, false);
+  const personal = await handlers.launch({ hostId: "host-a", projectId: "proj_personal", model: "exact-agent", workspacePath: "/existing/rig", prompt: "Review this" });
   assert.equal(personal.uncertain, false);
   assert.match(personal.error, /standard BB project/);
   assert.equal(spawned, undefined);

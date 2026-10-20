@@ -7,21 +7,21 @@ export function registerLauncher(bb: BbPluginApi) {
   bb.onDispose(() => lifetime.abort());
   const host = bb.hosts.experimental_client({ contract: launcherHostContract });
   const signal = () => AbortSignal.any([lifetime.signal, AbortSignal.timeout(60_000)]);
-  async function validateScope(hostId: string, projectId: string | null) {
+  async function validateScope(hostId: string, projectId: string) {
     const [hosts, projects] = await Promise.all([bb.sdk.hosts.list(), bb.sdk.projects.list({ includePersonal: true })]);
     const selectedHost = hosts.find(h => h.id === hostId && h.status === "connected");
     if (!selectedHost) throw new Error("The selected BB host is unavailable. Refresh and choose a connected host.");
     if (selectedHost.maxPermissionMode !== "full") throw new Error("Gas City requires a BB host with full permission mode.");
-    const project = projects.find(p => projectId === null ? p.kind === "personal" : p.id === projectId);
+    const project = projects.find(p => p.id === projectId);
     if (!project || project.kind === "personal") throw new Error("Choose a standard BB project with an existing workspace; personal projects cannot adopt unmanaged workspaces.");
     return project;
   }
   bb.rpc.register(launcherContract, {
     async choices() {
-      const [hosts, projects] = await Promise.all([bb.sdk.hosts.list(), bb.sdk.projects.list({ includePersonal: true })]);
+      const [hosts, projects] = await Promise.all([bb.sdk.hosts.list(), bb.sdk.projects.list()]);
       return {
         hosts: hosts.map(h => ({ id: h.id, name: h.name, connected: h.status === "connected" })),
-        projects: projects.filter(p => p.kind !== "personal").map(p => ({ id: p.id, name: p.name, personal: p.kind === "personal" })),
+        projects: projects.filter(p => p.kind !== "personal").map(p => ({ id: p.id, name: p.name })),
       };
     },
     async catalog({ hostId, projectId }) {

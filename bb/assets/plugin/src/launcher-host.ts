@@ -9,7 +9,7 @@ import { validateReasoning, type ReasoningLevel } from "./reasoning.js";
 
 // All filesystem checks execute on the selected BB host, never the server.
 export function createLauncherHostHandlers(loadConfig: () => Promise<Config> = readConfig) {
-  async function catalog(input: { projectId: string | null }, context: { signal: AbortSignal }): Promise<LaunchCatalog> {
+  async function catalog(input: { projectId: string }, context: { signal: AbortSignal }): Promise<LaunchCatalog> {
     context.signal.throwIfAborted();
     const config = await loadConfig();
     const found = await discover(config, input, connection => new GasCityClient(connection, (url, init) => fetch(url, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, context.signal]) : context.signal })));
@@ -46,7 +46,7 @@ export function createLauncherHostHandlers(loadConfig: () => Promise<Config> = r
   }
   return {
     catalog,
-    async validate(input: { projectId: string | null; model: string; workspacePath: string; reasoningLevel?: ReasoningLevel }, context: { signal: AbortSignal }) {
+    async validate(input: { projectId: string; model: string; workspacePath: string; reasoningLevel?: ReasoningLevel }, context: { signal: AbortSignal }) {
       const fresh = await catalog({ projectId: input.projectId }, context);
       if (fresh.workspacePolicy !== "require-match") throw new Error("Enable require-match on this host before coding: gc bb connect --workspace-policy require-match (include your connection URL).");
       const agent = fresh.agents.find(a => a.id === input.model);

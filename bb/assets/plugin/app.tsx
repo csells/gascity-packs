@@ -37,7 +37,7 @@ export function GasCityLauncher() {
     setCatalog(undefined); setError("");
     if (!hostId || !project) { setLoading(false); return; }
     setLoading(true);
-    rpc.call("catalog", { hostId, projectId: project === "globals" ? null : project }).then(value => {
+    rpc.call("catalog", { hostId, projectId: project }).then(value => {
       if (request === generation.current) setCatalog(value);
     }).catch(cause => {
       if (request === generation.current) setError(String(cause.message ?? cause));
@@ -50,14 +50,14 @@ export function GasCityLauncher() {
   }, [selected]);
   const groups = [...new Set(catalog?.agents.map(a => a.group) ?? [])];
   const hostAvailable = choices?.hosts.some(h => h.id === hostId && h.connected);
-  const projectAvailable = choices?.projects.some(p => project === "globals" ? p.personal : p.id === project);
+  const projectAvailable = choices?.projects.some(p => p.id === project);
   const canLaunch = selected && selected.reasoningLevels.includes(reasoningLevel) && hostAvailable && projectAvailable && workspacePath.trim() && prompt.trim() && catalog?.workspacePolicy === "require-match" && !loading && !starting && !uncertain;
   function changeScope(change: () => void) { generation.current++; setCatalog(undefined); setModel(""); setReasoningLevel("none"); setWorkspacePath(""); change(); }
   async function launch() {
     if (!canLaunch) return;
     setStarting(true); setError("");
     try {
-      const result = await rpc.call("launch", { hostId, projectId: project === "globals" ? null : project, model, workspacePath: workspacePath.trim(), reasoningLevel, prompt });
+      const result = await rpc.call("launch", { hostId, projectId: project, model, workspacePath: workspacePath.trim(), reasoningLevel, prompt });
       if (mounted.current) {
         if ("threadId" in result) navigate.toThread(result.threadId);
         else {
@@ -109,7 +109,7 @@ export function GasCityLauncher() {
           <label>Project<select aria-label="Project" value={project} disabled={!hostId || starting || uncertain} onChange={e => changeScope(() => setProject(e.target.value))}>
             <option value="">Choose a project</option>
             {project && !projectAvailable && <option value={project}>Selected project unavailable</option>}
-            {choices?.projects.map(p => <option key={p.id} value={p.personal ? "globals" : p.id}>{p.personal ? "Global agents · Personal" : p.name}</option>)}
+            {choices?.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select></label>
         </div>
         <label>Agent<select aria-label="Agent" value={model} disabled={!catalog || starting || uncertain} onChange={e => { setModel(e.target.value); setReasoningLevel("none"); setWorkspacePath(catalog?.agents.find(a => a.id === e.target.value)?.workspacePath ?? ""); }}>
@@ -138,7 +138,7 @@ export function GasCityLauncher() {
       {catalog?.warnings.map((warning, i) => <p className="gc-note" key={i}>{warning}</p>)}
       <details><summary>Connection and project setup</summary>
         <p>Run these commands on the selected BB host. Use its Gas City supervisor URL and the BB project ID shown below. Configuration changes are picked up by Refresh.</p>
-        <code>{`gc bb connect --url http://127.0.0.1:8372 --workspace-policy require-match\ngc bb bind --project ${project && project !== "globals" ? JSON.stringify(project) : "<BB-project-ID>"} --id <connection-ID> --city <city> --rig <rig> --path <checkout-path>`}</code>
+        <code>{`gc bb connect --url http://127.0.0.1:8372 --workspace-policy require-match\ngc bb bind --project ${project ? JSON.stringify(project) : "<BB-project-ID>"} --id <connection-ID> --city <city> --rig <rig> --path <checkout-path>`}</code>
         <p>Gas City controls the model, runtime, and tool approvals. This launcher sends text and requires a matching workspace. A disconnected host or missing agent must be selected again.</p>
       </details>
     </div>
