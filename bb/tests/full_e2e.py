@@ -395,7 +395,7 @@ def main():
     parser.add_argument("--environment-manifest", type=Path)
     parser.add_argument("--runtime", choices=["claude", "codex"])
     for name in ("gc-bin", "bb-bin", "bb-app-bin", "gc-development-base", "gc-commit", "channel",
-                 "claude-native-config", "runtime-raw-bin", "model-route"):
+                 "claude-native-config", "runtime-raw-bin", "model-route", "codex-model", "codex-base-url"):
         parser.add_argument("--" + name)
     parser.add_argument("--report-dir", type=Path, required=True)
     parser.add_argument("--timeout", type=int, default=240)
@@ -411,7 +411,8 @@ def main():
             "--gc-bin", args.gc_bin, "--bb-bin", args.bb_bin, "--bb-app-bin", args.bb_app_bin,
             "--gc-commit", args.gc_commit, "--timeout", str(args.timeout),
             "--report-dir", str(prepare), "--prepare-only"]
-        for name in ("gc-development-base", "claude-native-config", "runtime-raw-bin", "model-route"):
+        for name in ("gc-development-base", "claude-native-config", "runtime-raw-bin", "model-route",
+                     "codex-model", "codex-base-url"):
             value = getattr(args, name.replace("-", "_"))
             if value is not None: command += ["--" + name, value]
         subprocess.run(command, check=True)

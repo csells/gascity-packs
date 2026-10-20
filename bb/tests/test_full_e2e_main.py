@@ -44,6 +44,24 @@ class FullE2EArgumentsTests(unittest.TestCase):
         runner.assert_called_once_with(self.manifest, report, 123, "chrome")
         runner.return_value.run.assert_called_once_with({"native.personal", "reasoning.none"})
 
+    def test_codex_preparation_forwards_its_model_and_provider(self):
+        report = self.root / "report"
+        options = {"--runtime": "codex", "--gc-bin": "/pinned/gc", "--bb-bin": "/pinned/bb",
+            "--bb-app-bin": "/pinned/bb-app", "--gc-commit": "a" * 40, "--gc-development-base": "1.5.0",
+            "--codex-model": "gpt-6-astra", "--codex-base-url": "https://gateway.example/v1",
+            "--report-dir": str(report)}
+        def prepare(command, **kwargs):
+            for name in ("--codex-model", "--codex-base-url", "--gc-development-base"):
+                self.assertEqual(command[command.index(name) + 1], options[name])
+            directory = Path(command[command.index("--report-dir") + 1])
+            directory.mkdir()
+            (directory / "environment.json").write_text(json.dumps(self.manifest))
+        argv = ["full_e2e.py", *(value for pair in options.items() for value in pair)]
+        with patch("sys.argv", argv), patch("full_e2e.subprocess.run", side_effect=prepare), \
+             patch("full_e2e.Runner") as runner:
+            runner.return_value.run.return_value = 0
+            self.assertEqual(main(), 0)
+
     def test_retained_manifest_is_used_without_repreparing_or_relabeling(self):
         manifest_path = self.root / "environment.json"
         manifest_path.write_text(json.dumps(self.manifest))
