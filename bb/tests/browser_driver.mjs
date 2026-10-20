@@ -509,11 +509,15 @@ export async function runBrowser(argv = process.argv.slice(2), surface = null) {
             id: row.getAttribute('data-timeline-row-id'), text: [...row.querySelectorAll('[data-markdown-preview]')].map(node => node.innerText).join('\n'),
           })));
           if (args.action === 'deny') {
-            for (const row of await page.locator('[data-timeline-row-id]').all()) {
-              const id = await row.getAttribute('data-timeline-row-id');
-              if (!id.includes(':question:') && !id.includes(':tool:')) continue;
-              const evidence = visibleRows.find(value => value.id === id);
-              if (evidence) { evidence.visible = await row.isVisible(); evidence.aria = await row.ariaSnapshot(); }
+            // Locate each row by its ID from the snapshot above: BB re-renders
+            // the timeline as the denied turn's disclosure opens, so a
+            // positional handle from .all() can vanish and stall for 30 s.
+            for (const evidence of visibleRows) {
+              if (!evidence.id.includes(':question:') && !evidence.id.includes(':tool:')) continue;
+              const row = page.locator(`[data-timeline-row-id=${JSON.stringify(evidence.id)}]`);
+              if (await row.count() !== 1) continue;
+              evidence.visible = await row.isVisible();
+              evidence.aria = await row.ariaSnapshot({ timeout: 5000 }).catch(() => undefined);
             }
           }
           result.events = events;
