@@ -259,15 +259,35 @@ tests against the original runtime store. All workspaces, cities, BB stores,
 ports and tmux sockets are separate from normal work. State remains available
 after the harness stops its own services.
 
-Codex 0.153.4 also requires trust for hook definitions, separately from workspace
+Codex also requires trust for hook definitions, separately from workspace
 trust. The acceptance harness seeds native trust for exactly four reviewed GC
 hooks in its fresh configuration and verifies their definitions before launch.
 `bb/tests/codex_hook_trust.py` keeps one reviewed set per GC hook generation
-(released 1.5.0, and current main since GC #6579) and documents how each trust
-digest is derived from Codex 0.153.4's hook hash; a released GC selects the
-released set and a declared development build the current one. Changed or
-additional hooks retain normal review requirements. This setup is confined to
-the test harness; it does not change the pack's permission policy.
+(released 1.5.0, and current main since GC #6579, which the GC integration build
+`1.6.0-dev.d0835cd45` also writes) and documents how each trust digest is
+derived from Codex's hook hash. It accepts only Codex releases whose derivation
+was read from source at their `rust-v` tag, currently 0.153.4 and 0.163.0; the
+tests check every reviewed digest and 0.163.0's own fingerprint test vector
+against the derivation. A released GC selects the released set and a declared
+development build the current one. Changed or additional hooks retain normal
+review requirements, and the launch wrapper refuses them. This setup is confined
+to the test harness; it does not change the pack's permission policy.
+
+Codex's built-in default model is not served by every OpenAI-compatible gateway;
+Manifold, for example, rejects `gpt-5.5`. Pass `--codex-model <name>` to pin the
+model and `--codex-base-url <Responses endpoint>` to route the isolated Codex
+configuration to that gateway. The provider block reuses the harness's private
+`auth.json` key (`requires_openai_auth`); no secret is written to
+`config.toml`. Without these options Codex keeps its own default model and
+provider. Reports record `codexModel` and `codexBaseUrl`.
+
+Every conversation runs in a mapped BB project: the bridge refuses BB's Personal
+project with `GasCityProjectRequiredError`. The `global` scope therefore runs
+its city agent in a project bound at city scope (`gc bb bind` without
+`--rig`) on the global workspace, and the `rig` scope in the rig-bound project.
+
+A requested standalone marker line may end with trailing sentence punctuation
+(`.,;:!?`), as in `TOOLS_OK_<id>.`; anything else on that line still fails.
 
 For repeated local checks, keep one isolated GC/BB environment running and call
 `bb/tests/live_assertions.py` with its explicit host, project, agent, workspace
@@ -302,7 +322,8 @@ cases and absent implementations cannot count as passes.
 
 The matrix follows the pack's documented project contract: the native New
 thread picker lists Gas City agents only for a project bound with `gc bb bind`,
-and BB's personal project stays projectless. `native.personal` asserts that
+and BB's personal project stays projectless; the bridge refuses a conversation
+started there. `native.personal` asserts that
 empty personal picker and then holds its conversation with the global agent
 through the Gas City sidebar launcher; cases that drive the native picker use
 mapped projects, and each additive fixture workspace is bound to its own
@@ -352,6 +373,37 @@ raw screenshots, traces, event streams, credentials and command captures under
 summary and require an entirely passing ledger. Branch protection must
 separately require the aggregate check. A candidate pass does not certify an
 unchanged GC release or imply that branch protection is configured.
+
+## Development builds in the gcbb-fork container
+
+`gcbb-fork` on Hillsboro (README `/home/dev/README.md`) runs BB 0.46.1 plus the
+project picker (`csells/bb` `feat/gc-project-picker-0.46`, SDK runtime 0.6.50),
+the GC integration build `1.6.0-dev.d0835cd45` and this branch. Install the
+branch, then run the gate for each runtime as `dev`:
+
+```sh
+use-pack dev/bb-gc
+run-acceptance claude
+run-acceptance codex --codex-model gpt-6-astra \
+  --codex-base-url https://works.gascity.com/manifold-api/v1
+```
+
+`run-acceptance` sources the Manifold keys and the active GC build's identity and
+runs, from `~/src/gascity-packs`:
+
+```sh
+python3 -u bb/tests/live_acceptance.py --runtime <claude|codex> \
+  --gc-bin "$GC_BIN" --gc-development-base 1.5.0 --gc-commit "$GC_COMMIT" \
+  --bb-bin ~/opt/bb-bin/bb --bb-app-bin ~/opt/bb-bin/bb-app \
+  --timeout 600 --report-dir ~/acceptance/<UTC>-<runtime> [--codex-model ... --codex-base-url ...]
+```
+
+The container's default Codex is 0.163.0; Codex 0.153.4 under
+`~/opt/codex-0.153.4` is selected with
+`PATH=~/opt/codex-0.153.4/node_modules/.bin:$PATH run-acceptance codex ...`.
+The full product gate (`bb/tests/full_e2e.py`) also needs Playwright's
+Chromium in the container (`npm ci --prefix bb/tests --ignore-scripts` and
+`npx --prefix bb/tests playwright install --with-deps chromium`).
 
 ## Reproduce the browser check
 
