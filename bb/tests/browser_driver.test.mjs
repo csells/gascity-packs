@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dismissFirstRunGuide, assessCompletion, assessDenial, revealDeniedTurn, assessRejection, assessLauncherRejection, submitQueuedPrompt, assertPersistedQueuedPrompt, eventsAfter } from './browser_driver.mjs';
+import { dismissFirstRunGuide, assessCompletion, markerLineMatches, assessDenial, revealDeniedTurn, assessRejection, assessLauncherRejection, submitQueuedPrompt, assertPersistedQueuedPrompt, eventsAfter } from './browser_driver.mjs';
 
 test('event pagination obeys the BB 100-row limit and retains every event across sparse cursors', async () => {
   const expected = Array.from({ length: 237 }, (_, index) => ({ seq: 15 + index * 2, data: { value: index } }));
@@ -62,6 +62,22 @@ test('errors, unsupported reasoning and duplicate or mismatched completions fail
   input = valid(); input.events[2].data.clientRequestId = 'another-request';
   assert.throws(() => assessCompletion(input), /correlate/);
   assert.throws(() => assessCompletion({ ...valid(), reasoning: 'high' }), /reasoning/);
+});
+
+test('a requested marker line may end with trailing punctuation and nothing else', () => {
+  for (const text of ['Finished.\nDONE 123.', 'DONE 123!', 'DONE 123...']) {
+    const input = valid();
+    input.events[4].data.item.text = text; input.visibleRows[0].text = text;
+    assert.equal(assessCompletion(input).providerThreadId, 'gc-session-1', text);
+  }
+  for (const text of ['DONE 123. More', 'DONE 1234', 'DONE 123 .', '(DONE 123)', 'DONE 123`']) {
+    const input = valid();
+    input.events[4].data.item.text = text; input.visibleRows[0].text = text;
+    assert.throws(() => assessCompletion(input), /final line/, text);
+  }
+  assert.equal(markerLineMatches('DONE 123.', 'DONE 123'), true);
+  assert.equal(markerLineMatches('DONE 123x', 'DONE 123'), false);
+  assert.equal(markerLineMatches(undefined, 'DONE 123'), false);
 });
 
 test('an echoed marker elsewhere in the answer does not satisfy the final line', () => {

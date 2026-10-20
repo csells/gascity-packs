@@ -28,6 +28,21 @@ class AcceptanceFailure(RuntimeError):
     pass
 
 
+# A requested standalone marker line may end with sentence punctuation that
+# models append (for example "TOOLS_OK_<id>."), and nothing else.
+MARKER_TRAILING_PUNCTUATION = ".,;:!?"
+
+
+def marker_line_matches(line, expected):
+    """True when line is exactly the requested marker, optionally followed only by trailing punctuation."""
+    if not isinstance(line, str) or not isinstance(expected, str) or not expected:
+        return False
+    if not line.startswith(expected):
+        return False
+    rest = line[len(expected):]
+    return all(character in MARKER_TRAILING_PUNCTUATION for character in rest)
+
+
 def safe_provider_failure(payload):
     """Recognize known failures without disclosing arbitrary provider text."""
     text = json.dumps(payload).lower()
@@ -415,7 +430,7 @@ class LiveAssertions:
                            if item.get("type") == "agentMessage"]
                 answer = answers[-1] if answers else ""
                 answer_lines = answer.strip().splitlines()
-                if not answer_lines or answer_lines[-1] != expected:
+                if not answer_lines or not marker_line_matches(answer_lines[-1], expected):
                     # These reports are public CI artifacts. Keep model output,
                     # expected markers and the private memory word out of them.
                     tokens = expected.split()
@@ -425,12 +440,12 @@ class LiveAssertions:
                         "output_sha256": hashlib.sha256(encoded).hexdigest(),
                         "first_expected_token_present": bool(tokens) and tokens[0] in answer,
                         "last_expected_token_present": bool(tokens) and tokens[-1] in answer,
-                        "expected_line_present": expected in answer_lines,
+                        "expected_line_present": any(marker_line_matches(line, expected) for line in answer_lines),
                     }
                     raise AcceptanceFailure("Fresh final assistant message did not match the requested markers")
                 output = self.command("thread", "output", self.thread_id, "--json")
                 output_lines = output.get("output", "").strip().splitlines()
-                if not output_lines or output_lines[-1] != expected:
+                if not output_lines or not marker_line_matches(output_lines[-1], expected):
                     raise AcceptanceFailure("BB thread output did not expose the completed answer")
                 tools = [item for item in messages if item.get("type") in {"toolCall", "commandExecution"}]
                 if forbid_tools and tools:

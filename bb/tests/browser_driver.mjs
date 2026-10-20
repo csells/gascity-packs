@@ -45,6 +45,13 @@ function correlatedCompletion({ events, afterSeq, model, reasoning }) {
   return { terminal, turnId, scoped, request };
 }
 
+// A requested standalone marker line may end with sentence punctuation that
+// models append (for example "TOOLS_OK_<id>."), and nothing else.
+export function markerLineMatches(line, expected) {
+  if (typeof line !== 'string' || typeof expected !== 'string' || !expected || !line.startsWith(expected)) return false;
+  return /^[.,;:!?]*$/u.test(line.slice(expected.length));
+}
+
 export function assessCompletion(input) {
   const correlated = correlatedCompletion(input);
   if (!correlated) return null;
@@ -56,13 +63,13 @@ export function assessCompletion(input) {
   if (!answers.length) return null; // The event exists, but the user still has no answer.
   const answer = answers.at(-1).text.trim();
   if (expectedResponse) {
-    assert.equal(finalItem.text?.trim().split(/\r?\n/).at(-1), expectedResponse, 'Raw final line does not match the expected response');
+    assert.ok(markerLineMatches(finalItem.text?.trim().split(/\r?\n/).at(-1), expectedResponse), 'Raw final line does not match the expected response');
     // Markdown soft line breaks render as spaces. Keep the exact raw contract,
     // then require that ending in this same rendered item with only whitespace
     // normalized. A user echo, earlier item, or suffix inside another word fails.
     const rendered = answer.replace(/\s+/gu, ' ');
     const ending = expectedResponse.replace(/\s+/gu, ' ');
-    assert.ok(rendered === ending || rendered.endsWith(' ' + ending), 'Rendered final line does not match the expected response');
+    assert.ok([rendered, rendered.replace(/[.,;:!?]+$/u, '')].some(text => text === ending || text.endsWith(' ' + ending)), 'Rendered final line does not match the expected response');
   }
   return { turnId, requestId: request.requestId, providerThreadId: terminal.data.providerThreadId,
     completedSeq: terminal.seq, answer, renderedRowId: answers.at(-1).id };

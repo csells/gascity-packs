@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from live_assertions import AcceptanceFailure, LiveAssertions, safe_provider_failure, verify_prompt_frame, verify_resume_identity
+from live_assertions import AcceptanceFailure, LiveAssertions, marker_line_matches, safe_provider_failure, verify_prompt_frame, verify_resume_identity
 
 
 def completed_events():
@@ -239,6 +239,38 @@ class AcceptanceGuardTests(unittest.TestCase):
         events[3]["data"]["item"]["text"] = text
         self.assertEqual(self.run_guard(events, output=text), (5, "test-gc-session"))
 
+    def test_final_marker_line_may_end_with_trailing_punctuation_only(self):
+        # A live Codex run answered "TOOLS_OK_<id>." for a requested standalone marker line.
+        for text in ["TEST_MARKER.", "Done.\n\nTEST_MARKER.", "TEST_MARKER!", "TEST_MARKER..."]:
+            with self.subTest(text=text):
+                events = completed_events()
+                events[3]["data"]["item"]["text"] = text
+                self.assertEqual(self.run_guard(events, output=text), (5, "test-gc-session"))
+
+    def test_marker_line_with_anything_but_trailing_punctuation_cannot_pass(self):
+        for text in ["TEST_MARKER. Done", "TEST_MARKERS", "TEST_MARKER .", ".TEST_MARKER", "TEST_MARKER`",
+                     "**TEST_MARKER**", "TEST_MARKER.\nSomething else", "TEST_MARKER_2."]:
+            with self.subTest(text=text):
+                events = completed_events()
+                events[3]["data"]["item"]["text"] = text
+                with self.assertRaisesRegex(AcceptanceFailure, "Fresh final assistant"):
+                    self.run_guard(events, output=text)
+
+    def test_punctuated_marker_in_answer_still_requires_punctuated_marker_in_bb_output(self):
+        events = completed_events()
+        events[3]["data"]["item"]["text"] = "TEST_MARKER."
+        with self.assertRaisesRegex(AcceptanceFailure, "thread output"):
+            self.run_guard(events, output="TEST_MARKER and more")
+
+    def test_marker_line_matcher_is_strict_apart_from_trailing_punctuation(self):
+        self.assertTrue(marker_line_matches("BEGIN_x END_x", "BEGIN_x END_x"))
+        self.assertTrue(marker_line_matches("BEGIN_x END_x.", "BEGIN_x END_x"))
+        self.assertTrue(marker_line_matches("RESUMED_n word?!", "RESUMED_n word"))
+        for line in ("BEGIN_x  END_x", "BEGIN_x END_x. ", " BEGIN_x END_x", "BEGIN_x END_x)", "BEGIN_x END_xy", "", None):
+            with self.subTest(line=line):
+                self.assertFalse(marker_line_matches(line, "BEGIN_x END_x"))
+        self.assertFalse(marker_line_matches("anything", ""))
+
     def test_embedded_or_nonfinal_marker_cannot_pass(self):
         for text in ["Not TEST_MARKER", "TEST_MARKER\nSomething else"]:
             with self.subTest(text=text):
@@ -254,6 +286,7 @@ class AcceptanceGuardTests(unittest.TestCase):
             ("BEGIN_private private-answer", True, False, False),
             ("private-answer END_private", False, True, False),
             (expected + "\nprivate-answer", True, True, True),
+            (expected + ".\nprivate-answer", True, True, True),
         ]:
             with self.subTest(text=text):
                 events = completed_events()

@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from live_assertions import AcceptanceFailure, verify_prompt_frame, verify_resume_identity
+from live_assertions import AcceptanceFailure, marker_line_matches, verify_prompt_frame, verify_resume_identity
 from live_faults import FaultFailure, FaultProxy, verify_recovery
 
 
@@ -69,7 +69,7 @@ def verify_native_completion(frame, receipt, prompt, expected):
     text = "\n".join(block.get("text", "") for block in answer.get("blocks", [])
                      if block.get("type") == "text")
     lines = text.strip().splitlines()
-    if not lines or lines[-1] != expected:
+    if not lines or not marker_line_matches(lines[-1], expected):
         raise FaultFailure("GC native answer did not satisfy the fault case's final marker")
     return {**evidence, "gc_assistant_message_id": answer["id"],
             "answer_sha256": hashlib.sha256(text.encode()).hexdigest()}
