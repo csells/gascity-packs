@@ -4,6 +4,21 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type ActiveWorkStep = {
+    /**
+     * The step bead's description; empty when it has none.
+     */
+    description: string;
+    /**
+     * The step bead's id.
+     */
+    id: string;
+    /**
+     * The step bead's title.
+     */
+    title: string;
+};
+
 export type AdapterCapabilities = {
     MaxMessageLength: number;
     SupportsAttachments: boolean;
@@ -940,7 +955,7 @@ export type EventEmitRequest = {
     type: string;
 };
 
-export type EventPayload = AdapterEventPayload | BackendCredentialResolvedPayload | BeadClaimRejectedPayload | BeadClaimReleasedPayload | BeadDeadAssigneeReopenedPayload | BeadEventPayload | BeadWorktreeReapSkippedPayload | BeadWorktreeReapedPayload | BlockedRecomputedPayload | BoundEventPayload | CityCreateSucceededPayload | CityLifecyclePayload | CityUnregisterSucceededPayload | ConditionalWritesDegradedPayload | ControlDispatcherScopeGapPayload | ControlRootSettleFailedPayload | ControlStalledPayload | ExecutionClaimWindowExpiredPayload | ExecutionStepStalledPayload | GroupCreatedEventPayload | HookClaimReclaimedStalePayload | InboundEventPayload | MailEventPayload | MoleculeResolvedPayload | NoPayload | OrderSkippedPayload | OrderSuppressedPayload | OutboundChannelMismatchPayload | OutboundEventPayload | ProjectIdentityStampedPayload | Record | RequestFailedPayload | RigCreateSucceededPayload | RigProvisionProgressPayload | RotatedPayload | SessionCreateSucceededPayload | SessionDemandClaimDivergencePayload | SessionDrainAckedWithAssignedWorkPayload | SessionLifecyclePayload | SessionMessageSucceededPayload | SessionPendingClearedPayload | SessionPendingPayload | SessionPoolSlotRetiredAtDrainDeadlinePayload | SessionResetStalledPayload | SessionStrandedClaimsPayload | SessionStrandedPayload | SessionSubmitSucceededPayload | SessionUnknownStatePayload | SessionWakeRefusedPayload | StorageBindingOutcomePayload | StoreDiskCriticalPayload | StoreDiskWarnPayload | StoreMaintenanceDonePayload | StoreMaintenanceFailedPayload | SupervisorFsPressureSkippedTickPayload | SupervisorRequestPayload | SupervisorShutdownPayload | SupervisorStartedPayload | UnboundEventPayload | WebhookReceivedPayload | WebhookRejectedPayload | WorkerOperationEventPayload;
+export type EventPayload = AdapterEventPayload | BackendCredentialResolvedPayload | BeadClaimRejectedPayload | BeadClaimReleasedPayload | BeadDeadAssigneeReopenedPayload | BeadEventPayload | BeadWorktreeReapSkippedPayload | BeadWorktreeReapedPayload | BlockedRecomputedPayload | BoundEventPayload | CityCreateSucceededPayload | CityLifecyclePayload | CityUnregisterSucceededPayload | ConditionalWritesDegradedPayload | ControlDispatcherScopeGapPayload | ControlRootSettleFailedPayload | ControlStalledPayload | ExecutionClaimWindowExpiredPayload | ExecutionStepStalledPayload | GroupCreatedEventPayload | HookClaimReclaimedStalePayload | InboundEventPayload | MailEventPayload | MoleculeResolvedPayload | NoPayload | OrderInapplicablePayload | OrderSkippedPayload | OrderSuppressedPayload | OutboundChannelMismatchPayload | OutboundEventPayload | ProjectIdentityStampedPayload | Record | RequestAcceptedPayload | RequestFailedPayload | RigCreateSucceededPayload | RigProvisionProgressPayload | RotatedPayload | SessionCreateSucceededPayload | SessionDemandClaimDivergencePayload | SessionDrainAckedWithAssignedWorkPayload | SessionLifecyclePayload | SessionMessageSucceededPayload | SessionPendingClearedPayload | SessionPendingPayload | SessionPoolSlotRetiredAtDrainDeadlinePayload | SessionResetStalledPayload | SessionStrandedClaimsPayload | SessionStrandedPayload | SessionSubmitSucceededPayload | SessionUnknownStatePayload | SessionWakeRefusedPayload | StorageBindingOutcomePayload | StoreDiskCriticalPayload | StoreDiskWarnPayload | StoreMaintenanceDonePayload | StoreMaintenanceFailedPayload | SupervisorFsPressureSkippedTickPayload | SupervisorRequestPayload | SupervisorShutdownPayload | SupervisorStartedPayload | UnboundEventPayload | WebhookReceivedPayload | WebhookRejectedPayload | WorkLadderPayload | WorkerOperationEventPayload;
 
 export type EventRotateAnchor = {
     /**
@@ -2132,6 +2147,13 @@ export type OrderHistoryListBody = {
     entries: Array<OrderHistoryEntry> | null;
 };
 
+export type OrderInapplicablePayload = {
+    backend: string;
+    order_name: string;
+    requires_backend: Array<string> | null;
+    scope: string;
+};
+
 export type OrderListBody = {
     /**
      * Registered orders.
@@ -2699,6 +2721,44 @@ export type ReadinessResponse = {
     };
 };
 
+export type ReadyBead = {
+    assignee?: string;
+    blocked_by?: Array<ReadyBeadBlocker> | null;
+    close_reason?: string;
+    created_at: string;
+    defer_until?: string;
+    dependencies?: Array<ReadyBeadDep> | null;
+    description?: string;
+    ephemeral?: boolean;
+    from?: string;
+    id: string;
+    is_blocked?: boolean;
+    issue_type: string;
+    labels?: Array<string> | null;
+    metadata?: {
+        [key: string]: string;
+    };
+    needs?: Array<string> | null;
+    no_history?: boolean;
+    parent?: string;
+    priority?: number;
+    ref?: string;
+    status: string;
+    title: string;
+    updated_at?: string;
+};
+
+export type ReadyBeadBlocker = {
+    id: string;
+    status: string;
+};
+
+export type ReadyBeadDep = {
+    depends_on_id: string;
+    issue_id: string;
+    type: string;
+};
+
 export type Record = {
     actor: string;
     created_at: string;
@@ -2712,6 +2772,17 @@ export type Record = {
     severity: string;
     source_path?: string;
     source_pid?: number;
+};
+
+export type RequestAcceptedPayload = {
+    /**
+     * Which operation was accepted.
+     */
+    operation: 'session.create' | 'session.message' | 'session.submit';
+    /**
+     * Correlation ID from the 202 response.
+     */
+    request_id: string;
 };
 
 export type RequestFailedPayload = {
@@ -2735,6 +2806,25 @@ export type RequestFailedPayload = {
      * Session a failed session.create had already written, when the server could identify it, so the client can inspect or clean it up instead of retrying into a duplicate. Absence does not prove that no session was written. The event subject does not carry this ID; match the event to its request by request_id.
      */
     session_id?: string;
+};
+
+export type RequestOutcome = {
+    /**
+     * The terminal event exactly as /v0/city/{cityName}/events and the event stream deliver it: request.result.session.* for succeeded, request.failed for failed. Absent while pending and for outcome_unknown.
+     */
+    event?: TypedEventStreamEnvelope;
+    /**
+     * The operation that was accepted.
+     */
+    operation: 'session.create' | 'session.message' | 'session.submit';
+    /**
+     * The request_id from the 202 response.
+     */
+    request_id: string;
+    /**
+     * pending: the request is still running. succeeded: its request.result.* event was recorded; event carries it. failed: its request.failed event was recorded; event carries it. outcome_unknown: the server that accepted the request stopped (or lost the terminal event) before recording an outcome, so the operation may or may not have taken effect; inspect the target resource before retrying.
+     */
+    state: 'pending' | 'succeeded' | 'failed' | 'outcome_unknown';
 };
 
 export type RigActionBody = {
@@ -4752,6 +4842,102 @@ export type SessionTranscriptStructuredResponse = {
     template: string;
 };
 
+export type SessionTurnCapabilities = {
+    /**
+     * How turn ends are known: recorded means every end carries its id and how it ended; inferred means some ends are inferred from the session going idle.
+     */
+    end: 'none' | 'boundary' | 'inferred' | 'recorded';
+    /**
+     * How an interrupt could be confined to a named turn: atomic means the runtime refuses to interrupt a turn that is not current; checked means the turn is re-read just before an untargeted interrupt, so a turn starting in between can still be hit; none means an interrupt cannot be aimed at a turn.
+     */
+    fence: 'none' | 'checked' | 'atomic';
+    /**
+     * How the runtime interrupts the session's turn. unsupported forces fence none.
+     */
+    interrupt: 'keystroke' | 'protocol' | 'unsupported';
+    /**
+     * How a delivery is tied to the turn it started: exact means the runtime names it; correlated means it is matched by observation.
+     */
+    link: 'none' | 'correlated' | 'exact';
+    /**
+     * Every turn since the last read can be recovered from the next one.
+     */
+    lossless: boolean;
+    /**
+     * How turn starts are known: recorded means every start carries its turn id.
+     */
+    start: 'none' | 'boundary' | 'recorded';
+};
+
+export type SessionTurnCurrent = {
+    /**
+     * The turn's id, as the source records it. Opaque; compare for equality only.
+     */
+    id: string;
+    /**
+     * When the turn started, at the source's precision; absent when unknown.
+     */
+    started_at?: string;
+};
+
+export type SessionTurnEnded = {
+    /**
+     * When the turn ended: the source's time, or the server's for an inferred end.
+     */
+    ended_at: string;
+    /**
+     * The turn's id, as the source records it. Opaque; compare for equality only.
+     */
+    id: string;
+    /**
+     * The end was inferred from the session going idle, not recorded.
+     */
+    inferred: boolean;
+    /**
+     * When the turn started, at the source's precision; absent when unknown.
+     */
+    started_at?: string;
+    /**
+     * How the turn ended: completed, cancelled or failed (the runtime's spelling); absent when the source closed it only because a newer turn started.
+     */
+    status?: string;
+};
+
+export type SessionTurnResponse = {
+    /**
+     * How far the source's answer can be trusted.
+     */
+    capabilities: SessionTurnCapabilities;
+    /**
+     * The turn in progress. Absent when no turn is running, or when the observation is not observed.
+     */
+    current?: SessionTurnCurrent;
+    /**
+     * Why the observation is not observed.
+     */
+    detail?: string;
+    /**
+     * What this read saw. observed: current and recent are this read's answer, and an absent current means no turn is running. unavailable: the source exists but could not be read now (a transcript not written yet, no conversation key yet, a runtime that did not answer); the session's turns are unknown, not idle, so retry. unsupported: the session's turns cannot be identified (no source, or a transcript that records turns without ids).
+     */
+    observation: 'observed' | 'unavailable' | 'unsupported';
+    /**
+     * When the read was made, on the server's clock. Present only when observed.
+     */
+    observed_at?: string;
+    /**
+     * Turns that ended, newest first. A transcript source reports at most 8 from a bounded window, so a turn that ends between two reads can fall out of it unless capabilities.lossless is true.
+     */
+    recent?: Array<SessionTurnEnded> | null;
+    /**
+     * The resolved session id.
+     */
+    session_id: string;
+    /**
+     * Where the session's turns are read from: protocol (the runtime observes turns itself), transcript (the provider's transcript of the session's own conversation, on this host), or none (the session's turns cannot be identified here). Fixed for the session's generation.
+     */
+    source: 'protocol' | 'transcript' | 'none';
+};
+
 export type SessionUnknownStatePayload = {
     /**
      * False on the first-sight emission; true when re-emitted after the bead has sat unrecognized past the escalation threshold.
@@ -5729,6 +5915,8 @@ export type TypedEventStreamEnvelope = ({
 } & TypedEventStreamEnvelopeOrderFailed) | ({
     type: 'order.fired';
 } & TypedEventStreamEnvelopeOrderFired) | ({
+    type: 'order.inapplicable';
+} & TypedEventStreamEnvelopeOrderInapplicable) | ({
     type: 'order.skipped';
 } & TypedEventStreamEnvelopeOrderSkipped) | ({
     type: 'order.suppressed';
@@ -5737,6 +5925,8 @@ export type TypedEventStreamEnvelope = ({
 } & TypedEventStreamEnvelopeProjectIdentityStamped) | ({
     type: 'provider.swapped';
 } & TypedEventStreamEnvelopeProviderSwapped) | ({
+    type: 'request.accepted';
+} & TypedEventStreamEnvelopeRequestAccepted) | ({
     type: 'request.failed';
 } & TypedEventStreamEnvelopeRequestFailed) | ({
     type: 'request.result.city.create';
@@ -5825,6 +6015,20 @@ export type TypedEventStreamEnvelope = ({
 } & TypedEventStreamEnvelopeWebhookReceived) | ({
     type: 'webhook.rejected';
 } & TypedEventStreamEnvelopeWebhookRejected) | ({
+    type: 'work.escalated';
+} & TypedEventStreamEnvelopeWorkEscalated) | ({
+    type: 'work.nudge_failed';
+} & TypedEventStreamEnvelopeWorkNudgeFailed) | ({
+    type: 'work.nudged';
+} & TypedEventStreamEnvelopeWorkNudged) | ({
+    type: 'work.recycle_requested';
+} & TypedEventStreamEnvelopeWorkRecycleRequested) | ({
+    type: 'work.release_unfinished';
+} & TypedEventStreamEnvelopeWorkReleaseUnfinished) | ({
+    type: 'work.released';
+} & TypedEventStreamEnvelopeWorkReleased) | ({
+    type: 'work.started_unrecorded';
+} & TypedEventStreamEnvelopeWorkStartedUnrecorded) | ({
     type: 'worker.operation';
 } & TypedEventStreamEnvelopeWorkerOperation) | ({
     type: 'TypedEventStreamEnvelopeCustom';
@@ -6875,6 +7079,24 @@ export type TypedEventStreamEnvelopeOrderFired = {
 };
 
 /**
+ * TypedEventStreamEnvelope order.inapplicable
+ */
+export type TypedEventStreamEnvelopeOrderInapplicable = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: OrderInapplicablePayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'order.inapplicable';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
  * TypedEventStreamEnvelope order.skipped
  */
 export type TypedEventStreamEnvelopeOrderSkipped = {
@@ -6943,6 +7165,24 @@ export type TypedEventStreamEnvelopeProviderSwapped = {
     subject?: string;
     ts: string;
     type: 'provider.swapped';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope request.accepted
+ */
+export type TypedEventStreamEnvelopeRequestAccepted = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: RequestAcceptedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'request.accepted';
     workflow?: WorkflowEventProjection;
 };
 
@@ -7739,6 +7979,132 @@ export type TypedEventStreamEnvelopeWebhookRejected = {
 };
 
 /**
+ * TypedEventStreamEnvelope work.escalated
+ */
+export type TypedEventStreamEnvelopeWorkEscalated = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.escalated';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope work.nudge_failed
+ */
+export type TypedEventStreamEnvelopeWorkNudgeFailed = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.nudge_failed';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope work.nudged
+ */
+export type TypedEventStreamEnvelopeWorkNudged = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.nudged';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope work.recycle_requested
+ */
+export type TypedEventStreamEnvelopeWorkRecycleRequested = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.recycle_requested';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope work.release_unfinished
+ */
+export type TypedEventStreamEnvelopeWorkReleaseUnfinished = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.release_unfinished';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope work.released
+ */
+export type TypedEventStreamEnvelopeWorkReleased = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.released';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope work.started_unrecorded
+ */
+export type TypedEventStreamEnvelopeWorkStartedUnrecorded = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionLifecyclePayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.started_unrecorded';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
  * TypedEventStreamEnvelope worker.operation
  */
 export type TypedEventStreamEnvelopeWorkerOperation = {
@@ -7876,6 +8242,8 @@ export type TypedTaggedEventStreamEnvelope = ({
 } & TypedTaggedEventStreamEnvelopeOrderFailed) | ({
     type: 'order.fired';
 } & TypedTaggedEventStreamEnvelopeOrderFired) | ({
+    type: 'order.inapplicable';
+} & TypedTaggedEventStreamEnvelopeOrderInapplicable) | ({
     type: 'order.skipped';
 } & TypedTaggedEventStreamEnvelopeOrderSkipped) | ({
     type: 'order.suppressed';
@@ -7884,6 +8252,8 @@ export type TypedTaggedEventStreamEnvelope = ({
 } & TypedTaggedEventStreamEnvelopeProjectIdentityStamped) | ({
     type: 'provider.swapped';
 } & TypedTaggedEventStreamEnvelopeProviderSwapped) | ({
+    type: 'request.accepted';
+} & TypedTaggedEventStreamEnvelopeRequestAccepted) | ({
     type: 'request.failed';
 } & TypedTaggedEventStreamEnvelopeRequestFailed) | ({
     type: 'request.result.city.create';
@@ -7972,6 +8342,20 @@ export type TypedTaggedEventStreamEnvelope = ({
 } & TypedTaggedEventStreamEnvelopeWebhookReceived) | ({
     type: 'webhook.rejected';
 } & TypedTaggedEventStreamEnvelopeWebhookRejected) | ({
+    type: 'work.escalated';
+} & TypedTaggedEventStreamEnvelopeWorkEscalated) | ({
+    type: 'work.nudge_failed';
+} & TypedTaggedEventStreamEnvelopeWorkNudgeFailed) | ({
+    type: 'work.nudged';
+} & TypedTaggedEventStreamEnvelopeWorkNudged) | ({
+    type: 'work.recycle_requested';
+} & TypedTaggedEventStreamEnvelopeWorkRecycleRequested) | ({
+    type: 'work.release_unfinished';
+} & TypedTaggedEventStreamEnvelopeWorkReleaseUnfinished) | ({
+    type: 'work.released';
+} & TypedTaggedEventStreamEnvelopeWorkReleased) | ({
+    type: 'work.started_unrecorded';
+} & TypedTaggedEventStreamEnvelopeWorkStartedUnrecorded) | ({
     type: 'worker.operation';
 } & TypedTaggedEventStreamEnvelopeWorkerOperation) | ({
     type: 'TypedTaggedEventStreamEnvelopeCustom';
@@ -9080,6 +9464,25 @@ export type TypedTaggedEventStreamEnvelopeOrderFired = {
 };
 
 /**
+ * TypedTaggedEventStreamEnvelope order.inapplicable
+ */
+export type TypedTaggedEventStreamEnvelopeOrderInapplicable = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: OrderInapplicablePayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'order.inapplicable';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
  * TypedTaggedEventStreamEnvelope order.skipped
  */
 export type TypedTaggedEventStreamEnvelopeOrderSkipped = {
@@ -9152,6 +9555,25 @@ export type TypedTaggedEventStreamEnvelopeProviderSwapped = {
     subject?: string;
     ts: string;
     type: 'provider.swapped';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope request.accepted
+ */
+export type TypedTaggedEventStreamEnvelopeRequestAccepted = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: RequestAcceptedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'request.accepted';
     workflow?: WorkflowEventProjection;
 };
 
@@ -9992,6 +10414,139 @@ export type TypedTaggedEventStreamEnvelopeWebhookRejected = {
 };
 
 /**
+ * TypedTaggedEventStreamEnvelope work.escalated
+ */
+export type TypedTaggedEventStreamEnvelopeWorkEscalated = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.escalated';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope work.nudge_failed
+ */
+export type TypedTaggedEventStreamEnvelopeWorkNudgeFailed = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.nudge_failed';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope work.nudged
+ */
+export type TypedTaggedEventStreamEnvelopeWorkNudged = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.nudged';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope work.recycle_requested
+ */
+export type TypedTaggedEventStreamEnvelopeWorkRecycleRequested = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.recycle_requested';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope work.release_unfinished
+ */
+export type TypedTaggedEventStreamEnvelopeWorkReleaseUnfinished = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.release_unfinished';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope work.released
+ */
+export type TypedTaggedEventStreamEnvelopeWorkReleased = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: WorkLadderPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.released';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope work.started_unrecorded
+ */
+export type TypedTaggedEventStreamEnvelopeWorkStartedUnrecorded = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionLifecyclePayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'work.started_unrecorded';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
  * TypedTaggedEventStreamEnvelope worker.operation
  */
 export type TypedTaggedEventStreamEnvelopeWorkerOperation = {
@@ -10306,6 +10861,34 @@ export type WebhookRejectedPayload = {
      * Configured webhook name (empty only for unresolved routes, which are not evented).
      */
     webhook: string;
+};
+
+export type WorkActiveStepBody = {
+    /**
+     * The session's current formula step, exactly the bead its step reminder names; absent when there is none.
+     */
+    step?: ActiveWorkStep;
+};
+
+export type WorkLadderPayload = {
+    attempt?: number;
+    bead_id: string;
+    generation: number;
+    kind?: string;
+    paused?: boolean;
+    reason?: string;
+    rung?: string;
+    session_id: string;
+    session_name?: string;
+    store_ref?: string;
+    template?: string;
+};
+
+export type WorkReadyBody = {
+    /**
+     * The ready work, in the query's order, cut to its limit: exactly the rows gc ready prints.
+     */
+    items: Array<ReadyBead> | null;
 };
 
 export type WorkerOperationEventPayload = {
@@ -17203,6 +17786,52 @@ export type GetV0CityByCityNameReadinessResponses = {
 
 export type GetV0CityByCityNameReadinessResponse = GetV0CityByCityNameReadinessResponses[keyof GetV0CityByCityNameReadinessResponses];
 
+export type GetRequestOutcomeData = {
+    body?: never;
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+        /**
+         * The request_id from an async session request's 202 response.
+         */
+        requestId: string;
+    };
+    query?: never;
+    url: '/v0/city/{cityName}/request/{requestId}';
+};
+
+export type GetRequestOutcomeErrors = {
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Service Unavailable
+     */
+    503: ErrorModel;
+};
+
+export type GetRequestOutcomeError = GetRequestOutcomeErrors[keyof GetRequestOutcomeErrors];
+
+export type GetRequestOutcomeResponses = {
+    /**
+     * OK
+     */
+    200: RequestOutcome;
+};
+
+export type GetRequestOutcomeResponse = GetRequestOutcomeResponses[keyof GetRequestOutcomeResponses];
+
 export type DeleteV0CityByCityNameRigByNameData = {
     body?: never;
     headers: {
@@ -18236,7 +18865,12 @@ export type PostV0CityByCityNameSessionByIdKillData = {
          */
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Kill even when the session has live background subagents, or past a hung holder of its runtime lease whose record expired, as gc session kill --force does.
+         */
+        force?: boolean;
+    };
     url: '/v0/city/{cityName}/session/{id}/kill';
 };
 
@@ -19172,6 +19806,56 @@ export type GetV0CityByCityNameSessionByIdTranscriptResponses = {
 
 export type GetV0CityByCityNameSessionByIdTranscriptResponse = GetV0CityByCityNameSessionByIdTranscriptResponses[keyof GetV0CityByCityNameSessionByIdTranscriptResponses];
 
+export type GetV0CityByCityNameSessionByIdTurnData = {
+    body?: never;
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+        /**
+         * Session ID, alias, or runtime session_name.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/v0/city/{cityName}/session/{id}/turn';
+};
+
+export type GetV0CityByCityNameSessionByIdTurnErrors = {
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Service Unavailable
+     */
+    503: ErrorModel;
+};
+
+export type GetV0CityByCityNameSessionByIdTurnError = GetV0CityByCityNameSessionByIdTurnErrors[keyof GetV0CityByCityNameSessionByIdTurnErrors];
+
+export type GetV0CityByCityNameSessionByIdTurnResponses = {
+    /**
+     * OK
+     */
+    200: SessionTurnResponse;
+};
+
+export type GetV0CityByCityNameSessionByIdTurnResponse = GetV0CityByCityNameSessionByIdTurnResponses[keyof GetV0CityByCityNameSessionByIdTurnResponses];
+
 export type PostV0CityByCityNameSessionByIdUnpinData = {
     body?: never;
     headers: {
@@ -19386,6 +20070,10 @@ export type CreateSessionData = {
          * Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.
          */
         'X-GC-Request': string;
+        /**
+         * Idempotency key for safe retries.
+         */
+        'Idempotency-Key'?: string;
     };
     path: {
         /**
@@ -19414,6 +20102,10 @@ export type CreateSessionErrors = {
      * Not Found
      */
     404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
     /**
      * Unprocessable Entity
      */
@@ -19733,6 +20425,140 @@ export type GetV0CityByCityNameWaitsResponses = {
 };
 
 export type GetV0CityByCityNameWaitsResponse = GetV0CityByCityNameWaitsResponses[keyof GetV0CityByCityNameWaitsResponses];
+
+export type GetV0CityByCityNameWorkActiveStepData = {
+    body?: never;
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+    };
+    query: {
+        /**
+         * The session's identities, in the order the reminder tries them: its alias, its session name, its session id. Repeatable; one to eight.
+         */
+        assignee: Array<string> | null;
+        /**
+         * Directory of the work scope the session's work lives in, its rig root. Omitted or empty is the city.
+         */
+        scope_root?: string;
+    };
+    url: '/v0/city/{cityName}/work/active-step';
+};
+
+export type GetV0CityByCityNameWorkActiveStepErrors = {
+    /**
+     * Bad Request
+     */
+    400: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Service Unavailable
+     */
+    503: ErrorModel;
+};
+
+export type GetV0CityByCityNameWorkActiveStepError = GetV0CityByCityNameWorkActiveStepErrors[keyof GetV0CityByCityNameWorkActiveStepErrors];
+
+export type GetV0CityByCityNameWorkActiveStepResponses = {
+    /**
+     * OK
+     */
+    200: WorkActiveStepBody;
+};
+
+export type GetV0CityByCityNameWorkActiveStepResponse = GetV0CityByCityNameWorkActiveStepResponses[keyof GetV0CityByCityNameWorkActiveStepResponses];
+
+export type GetV0CityByCityNameWorkReadyData = {
+    body?: never;
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+    };
+    query?: {
+        /**
+         * Only work whose assignee is exactly this identity.
+         */
+        assignee?: string;
+        /**
+         * Only work with no assignee.
+         */
+        unassigned?: boolean;
+        /**
+         * Require metadata key=value, or a bare key for any non-empty value. Repeatable; every one must hold.
+         */
+        metadata_field?: Array<string> | null;
+        /**
+         * Drop beads of this issue type. Repeatable.
+         */
+        exclude_type?: Array<string> | null;
+        /**
+         * Drop beads carrying this label. Repeatable.
+         */
+        exclude_label?: Array<string> | null;
+        /**
+         * Order: oldest or newest by created_at. Omitted is the canonical ready order (priority, created_at, id).
+         */
+        sort?: 'oldest' | 'newest';
+        /**
+         * At most this many rows, cut after the merge and the order; 0 is unlimited.
+         */
+        limit?: number;
+        /**
+         * List beads in this status instead of ready work.
+         */
+        status?: 'open' | 'in_progress' | 'blocked' | 'closed';
+    };
+    url: '/v0/city/{cityName}/work/ready';
+};
+
+export type GetV0CityByCityNameWorkReadyErrors = {
+    /**
+     * Bad Request
+     */
+    400: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Service Unavailable
+     */
+    503: ErrorModel;
+};
+
+export type GetV0CityByCityNameWorkReadyError = GetV0CityByCityNameWorkReadyErrors[keyof GetV0CityByCityNameWorkReadyErrors];
+
+export type GetV0CityByCityNameWorkReadyResponses = {
+    /**
+     * OK
+     */
+    200: WorkReadyBody;
+};
+
+export type GetV0CityByCityNameWorkReadyResponse = GetV0CityByCityNameWorkReadyResponses[keyof GetV0CityByCityNameWorkReadyResponses];
 
 export type DeleteV0CityByCityNameWorkflowByWorkflowIdData = {
     body?: never;

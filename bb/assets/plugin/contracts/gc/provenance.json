@@ -1,9 +1,9 @@
 {
   "title": "Gas City Supervisor API",
   "source_repository": "https://github.com/csells/gascity",
-  "source_commit": "7c3134cc0aa7b8dd25aabdafa3f6a948c40d48b8",
-  "build": "unreleased (gastownhall/gascity#7944 head 7c3134cc0)",
-  "notes": "Generated canonical OpenAPI from gastownhall/gascity#7944 (head 7c3134cc0, rebased on main 0ed8c47ea). Stock upstream session API only; no fork-only routes. Live-schema equality is a separate staging qualification gate; no release or stable promotion is implied.",
-  "sha256": "dc01fd2ba3875fad30009461d025875f1f88aadc62227f308e2d5566f0501999",
+  "source_commit": "c56ba65c96f304748b3592476243c44fa6fbd1f5",
+  "build": "unreleased (local integration/bb at c56ba65c9, stamped 1.6.0-dev.c56ba65c9)",
+  "notes": "Canonical OpenAPI checked in at internal/api/openapi.json on the local Gas City integration branch integration/bb at c56ba65c9 (merge base with gastownhall/gascity main: b30c09996). The branch is not pushed to csells/gascity, so this commit is not on a public ref yet. The matching binary is /var/tmp/gc-integration/gc on hillsboro. Live-schema equality is a separate staging qualification gate; no release or stable promotion is implied.",
+  "sha256": "d330c66ad66e124cc6836c792dd368f7347d14ee907142e76c61a6cf8fdc7acc",
   "generator": "@hey-api/openapi-ts@0.99.0"
 }
