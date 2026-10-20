@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
-"""Exact GC hook onboarding for disposable Codex 0.153.4 acceptance cities.
+"""Exact GC hook onboarding for disposable Codex acceptance cities.
 
 Uses native per-handler trust, never the invocation-wide bypass. Only the
 reviewed hook sets below are trusted, each exactly as one GC hook generation
 writes .codex/hooks.json; any other text keeps Codex's normal review gate and
 the launch wrapper refuses it.
 
-Trust digests follow Codex rust-v0.153.4, codex-rs/hooks/src/engine/discovery.rs
-(hook_hash) and codex-rs/config/src/fingerprint.rs (version_for_toml): SHA-256
-over the canonical (key-sorted, compact) JSON of the normalized identity
+Trust digests follow Codex's hook_hash (codex-rs/hooks/src/engine/discovery.rs)
+and version_for_toml (codex-rs/config/src/fingerprint.rs): SHA-256 over the
+canonical (key-sorted, compact) JSON of the normalized identity
 {"event_name": <hook_event_key_label>, "matcher": <matcher>, "hooks": [{"type":
 "command", "command": <command>, "timeout": 600, "async": false}]}. Codex ignores
-matchers for UserPromptSubmit, so that identity has no "matcher". The persisted
-key (codex-rs/hooks/src/lib.rs hook_key) is "<hooks.json path>:<event>:<group>:
-<handler>"; the hash excludes the source path. hook_trust_digest() implements
-this and the tests check every reviewed digest against it, including the GC
-1.5.0 digests originally reviewed in Codex's /hooks UI.
+matchers for UserPromptSubmit (events/common.rs matcher_pattern_for_event), so
+that identity has no "matcher"; unset optional handler fields (commandWindows,
+statusMessage, additionalContextLimit) are absent from the TOML value. The
+persisted key (codex-rs/hooks/src/lib.rs hook_key) is "<hooks.json path>:<event>:
+<group>:<handler>"; the hash excludes the source path.
+
+SUPPORTED_CODEX_VERSIONS lists each Codex release whose source was read at its
+rust-v tag. rust-v0.153.4 and rust-v0.163.0 have the same hook_hash, hook_key,
+matcher_pattern_for_event, NormalizedHookIdentity and hook_config.rs
+(MatcherGroup, HookHandlerConfig) serialization. version_for_toml changed from a
+hand-written recursive key sort (canonical_json) to serde_json's
+sort_all_objects, which serializes the same bytes; 0.163.0's
+fingerprint_tests.rs pins that with a known digest. hook_trust_digest()
+implements the derivation, and the tests check every reviewed digest and
+Codex's own fingerprint vector against it, including the GC 1.5.0 digests
+originally reviewed in Codex 0.153.4's /hooks UI.
 """
 import argparse
 import hashlib
@@ -25,11 +36,20 @@ from pathlib import Path
 import shlex
 import sys
 
-CODEX_VERSION = "codex-cli 0.153.4"
+# Codex releases whose hook trust derivation was read from source at the tag.
+SUPPORTED_CODEX_VERSIONS = {
+    "codex-cli 0.153.4": "rust-v0.153.4",
+    "codex-cli 0.163.0": "rust-v0.163.0",
+}
 # Released GC cores whose hook text is the gc-1.5.0 set (see live_acceptance.CORE_COMMITS).
 RELEASED_HOOK_SET = "gc-1.5.0"
 # GC main since 392bd9134 ("Fix managed provider hook gc lookup", #6579) runs
 # "${GC_BIN:-gc}" and appends, rather than prepends, the fallback PATH entries.
+# The GC integration build 1.6.0-dev.d0835cd45 (integration/bb @ d0835cd45)
+# writes exactly this text into acceptance workspaces (captured in a live
+# gcbb-fork run on 2026-10-20; see test_codex_hook_trust.py). Its source can also
+# rebind managed hooks with --city <dir> and a "startup" SessionStart matcher
+# (#3866, #3808); that text is not reviewed, so the wrapper would refuse it.
 CURRENT_HOOK_SET = "gc-main-392bd9134"
 REVIEWED_HOOK_SETS = {
     RELEASED_HOOK_SET: ('export PATH="$HOME/go/bin:$HOME/.local/bin:$PATH" && ', (
@@ -74,14 +94,19 @@ def reviewed(hook_set):
     return REVIEWED_HOOK_SETS[hook_set]
 
 
+def version_for_toml(value):
+    """Codex's config fingerprint: SHA-256 of key-sorted compact JSON."""
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def hook_trust_digest(event_key, command):
-    """Codex 0.153.4 hook_hash for one command handler from GC's hooks.json."""
+    """Codex hook_hash for one command handler from GC's hooks.json."""
     identity = {"event_name": event_key,
                 "hooks": [{"type": "command", "command": command, "timeout": 600, "async": False}]}
     if event_key != "user_prompt_submit":
         identity["matcher"] = ""
-    canonical = json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(canonical.encode()).hexdigest()
+    return version_for_toml(identity)
 
 
 def expected_hooks(hook_set):
@@ -105,8 +130,9 @@ def verify_gc_hooks(workspace, hook_set):
 
 
 def trust_config(workspaces, codex_version, hook_set):
-    if codex_version != CODEX_VERSION:
-        raise ValueError("Native hook trust requires reviewed Codex 0.153.4")
+    if codex_version not in SUPPORTED_CODEX_VERSIONS:
+        raise ValueError("Native hook trust requires a Codex release whose hook hash was reviewed: "
+                         + ", ".join(SUPPORTED_CODEX_VERSIONS))
     _, hooks = reviewed(hook_set)
     text = []
     for workspace in workspaces:
