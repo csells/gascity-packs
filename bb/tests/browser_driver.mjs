@@ -45,6 +45,10 @@ function correlatedCompletion({ events, afterSeq, model, reasoning }) {
   return { terminal, turnId, scoped, request };
 }
 
+// The Gas City agent picker's empty state for a projectless scope, declared by
+// the plugin as experimental_picker.projectRequiredMessage in server.ts.
+export const GAS_CITY_PROJECT_REQUIRED = 'Select a Gas City project (city or rig) to see its agents.';
+
 // A requested standalone marker line may end with sentence punctuation that
 // models append (for example "TOOLS_OK_<id>."), and nothing else.
 export function markerLineMatches(line, expected) {
@@ -383,7 +387,10 @@ export async function runBrowser(argv = process.argv.slice(2), surface = null) {
       if (args.until === 'no-models') {
         // Documented contract: the native picker lists Gas City agents only
         // for a mapped project; BB's personal project stays projectless.
-        await picker.getByText('No models available', { exact: true }).waitFor({ state: 'visible' });
+        // Stock BB shows its generic empty catalog; BB with the agent picker
+        // shows the plugin's projectRequiredMessage (server.ts) instead.
+        await picker.getByText('No models available', { exact: true })
+          .or(picker.getByText(GAS_CITY_PROJECT_REQUIRED, { exact: true })).waitFor({ state: 'visible' });
         const listed = gasCityCatalogs.filter(row => new URL(row.url).searchParams.get('hostId') === args.host);
         assert.ok(listed.length, 'BB never requested the Gas City catalog for this host');
         assert.ok(listed.every(row => row.models === 0), 'Gas City listed models in a projectless native picker');

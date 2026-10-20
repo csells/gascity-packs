@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dismissFirstRunGuide, assessCompletion, markerLineMatches, assessDenial, revealDeniedTurn, assessRejection, assessLauncherRejection, submitQueuedPrompt, assertPersistedQueuedPrompt, eventsAfter } from './browser_driver.mjs';
+import { readFileSync } from 'node:fs';
+import { dismissFirstRunGuide, assessCompletion, markerLineMatches, GAS_CITY_PROJECT_REQUIRED, assessDenial, revealDeniedTurn, assessRejection, assessLauncherRejection, submitQueuedPrompt, assertPersistedQueuedPrompt, eventsAfter } from './browser_driver.mjs';
 
 test('event pagination obeys the BB 100-row limit and retains every event across sparse cursors', async () => {
   const expected = Array.from({ length: 237 }, (_, index) => ({ seq: 15 + index * 2, data: { value: index } }));
@@ -341,4 +342,9 @@ test('a fresh BB store first-run guide is skipped once and recorded', async () =
   assert.equal(await dismissFirstRunGuide(ready.page, name => steps.push(name)), false);
   assert.equal(ready.state.clicks, 0);
   assert.equal(steps.length, 1);
+});
+
+test('the projectless empty state the driver waits for is the plugin\'s declared picker message', () => {
+  const server = readFileSync(new URL('../assets/plugin/server.ts', import.meta.url), 'utf8');
+  assert.ok(server.includes(`projectRequiredMessage: ${JSON.stringify(GAS_CITY_PROJECT_REQUIRED)}`));
 });
