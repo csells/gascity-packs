@@ -17,7 +17,7 @@ class ReviewedLostCreateTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        self.harness, self.prompt, self.provider = test_live_assertions.PersonalTargetConfigTests().harness(Path(temp.name).resolve())
+        self.harness, self.prompt, self.provider = test_live_assertions.MappedTargetConfigTests().harness(Path(temp.name).resolve())
         self.path = (Path(self.harness.env["XDG_STATE_HOME"]) / "gascity/bb/sessions" /
                      (hashlib.sha256(self.harness.thread_id.encode()).hexdigest() + ".json"))
         self.receipt = json.loads(self.path.read_text())
@@ -27,7 +27,7 @@ class ReviewedLostCreateTests(unittest.TestCase):
         self.session = {"id": "gc-session", "template": "global", "alias": self.receipt["alias"],
                         "work_dir": str(self.harness.workspace)}
         request = json.dumps({"kind": "agent", "name": "global", "alias": self.receipt["alias"],
-                              "project_id": "proj_personal"})
+                              "project_id": "project-global"})
         accepted = {"status": "accepted", "request_id": "gc-create", "event_cursor": "1"}
         response = json.dumps(accepted)
         self.evidence = {

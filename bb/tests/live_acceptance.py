@@ -406,13 +406,16 @@ def main():
         run("gc", "bb", "connect", "--id", "local", "--url", f"http://127.0.0.1:{gc_port}")
         run("gc", "bb", "bind", "--project", project, "--city", city_name,
             "--rig", "sample", "--path", workspace_root)
+        # One mapped project per scope. The bridge refuses BB's Personal
+        # project, so the global (city) agent runs in a project bound at city
+        # scope, without a rig, whose catalog lists the city's agents.
+        native_projects = {}
+        for scope, workspace in workspaces.items():
+            native_projects[scope] = json.loads(run("bb", "project", "create", "--name", f"Native {scope}",
+                "--root", workspace, "--host", host, "--json").stdout)["id"]
+            run("gc", "bb", "bind", "--project", native_projects[scope], "--city", city_name,
+                *(() if scope == "global" else ("--rig", "sample")), "--path", workspace)
         if args.prepare_only:
-            native_projects = {}
-            for scope, workspace in workspaces.items():
-                native_projects[scope] = json.loads(run("bb", "project", "create", "--name", f"Native {scope}",
-                    "--root", workspace, "--host", host, "--json").stdout)["id"]
-                run("gc", "bb", "bind", "--project", native_projects[scope], "--city", city_name,
-                    "--rig", "sample", "--path", workspace)
             catalog = json.loads(run("gc", "bb", "agents", "--project", project, "--json").stdout)
             save_new(root / "environment-env.json", env)
             save_new(root / ".bb-full-e2e-owned.json", {"version": 1, "root": str(root)})
@@ -437,9 +440,9 @@ def main():
             progress("Isolated installation prepared; retaining services for browser and failure cases")
             return 0
         for scope, workspace in workspaces.items():
-            # Native New thread uses BB's personal directory for global agents;
-            # rig coding remains an explicitly mapped project/workspace.
-            scope_project = "proj_personal" if scope == "global" else project
+            # The global (city) agent runs in its city-mapped project; rig
+            # coding remains the explicitly mapped rig project/workspace.
+            scope_project = native_projects["global"] if scope == "global" else project
             catalog = json.loads(run("gc", "bb", "agents", "--project", scope_project, "--json").stdout)
             progress(f"Running real {scope} agent: full prompt, three completions, tool artifact, agent resume")
             name = "sample/rig" if scope == "rig" else "global"
@@ -452,7 +455,7 @@ def main():
                 "--model", targets[0]["id"], "--workspace", str(workspace),
                 "--artifacts", str(args.report_dir / scope), "--timeout", str(args.timeout), "--exercise-resume",
             ], env=env, cwd=root, timeout=args.timeout * 3 + 210)
-            scope_result = {"scope": scope, "projectMode": "personal" if scope == "global" else "mapped",
+            scope_result = {"scope": scope, "projectMode": "mapped-city" if scope == "global" else "mapped",
                             "status": "passed" if result.returncode == 0 else "failed"}
             if args.runtime == "claude" and result.returncode != 0:
                 try:

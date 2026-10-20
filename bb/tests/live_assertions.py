@@ -115,17 +115,6 @@ def decode_identity(value, prefix):
     return json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
 
 
-def verify_global_agent_config(target, config):
-    """The personal route still requires a live, explicitly configured global agent."""
-    agent = target.get("agent")
-    if target.get("v") != 1 or not isinstance(agent, str) or not agent or "/" in agent:
-        raise AcceptanceFailure("Personal conversations require an exact global agent")
-    matches = [item for item in config.get("agents", []) if item.get("name") == agent
-               and not item.get("dir") and item.get("scope") != "rig" and not item.get("suspended")]
-    if (config.get("workspace") or {}).get("suspended") or len(matches) != 1:
-        raise AcceptanceFailure("GC config does not expose the selected active global agent")
-
-
 def verify_reviewed_lost_create(receipt, evidence, *, project, workspace):
     """Bind a dropped create ACK to its captured bytes and reviewed alias lookup.
 
@@ -180,12 +169,10 @@ class LiveAssertions:
                  timeout=240, env=None, existing_thread_id=None, exercise_resume=False):
         self.bb_bin = str(bb_bin)
         self.host, self.project, self.model = host, project, model
-        self.personal_conversation = project == "proj_personal"
-        if self.personal_conversation:
-            target = decode_identity(model, "gc1_")
-            agent = target.get("agent")
-            if target.get("v") != 1 or not isinstance(agent, str) or not agent or "/" in agent:
-                raise AcceptanceFailure("Personal conversations require an exact global agent")
+        if project == "proj_personal":
+            # The bridge refuses BB's Personal project; every conversation,
+            # including a city (global) agent's, runs in a mapped project.
+            raise AcceptanceFailure("Gas City needs a mapped BB project; Personal-project conversations are refused")
         self.workspace = Path(workspace).resolve(strict=True)
         if not self.workspace.is_dir():
             raise AcceptanceFailure("Workspace must be an existing directory")
@@ -251,46 +238,11 @@ class LiveAssertions:
             raise AcceptanceFailure("BB selected a different provider or project")
         if environment.get("hostId") != self.host:
             raise AcceptanceFailure("BB selected a different host")
-        if self.personal_conversation:
-            if environment.get("managed") is not False and not (
-                    environment.get("managed") is True and environment.get("workspaceProvisionType") == "personal"):
-                raise AcceptanceFailure("BB did not provision its own personal workspace")
-        elif environment.get("managed") is not False:
+        if environment.get("managed") is not False:
             raise AcceptanceFailure("BB selected a managed project workspace")
-        bb_workspace = Path(environment.get("path") or "/").resolve()
-        if self.personal_conversation:
-            data_dir, environment_id = self.env.get("BB_DATA_DIR"), environment.get("id")
-            def component(value):
-                return (isinstance(value, str) and bool(value) and value not in {".", ".."}
-                        and Path(value).name == value)
-            if (not data_dir or not Path(data_dir).is_absolute() or not component(environment_id)
-                    or not Path(environment.get("path") or "/").is_absolute()):
-                raise AcceptanceFailure("Cannot verify BB's isolated personal workspace")
-            data_root = Path(data_dir).resolve()
-            provider = environment.get("environmentProviderId")
-            instance = environment.get("environmentProviderInstanceKey")
-            if provider is not None or instance is not None:
-                # BB 0.43 provisions one plugin-owned directory per thread.
-                if (provider != "personal-workspace" or not component(self.thread_id)
-                        or instance != self.thread_id or environment.get("managed") is not True
-                        or environment.get("workspaceProvisionType") != "personal"):
-                    raise AcceptanceFailure("BB personal workspace does not identify this thread's provider instance")
-                personal_workspace = (data_root / "plugins/environment-personal-workspace/host-data/workspaces"
-                                      / self.thread_id).resolve()
-            else:
-                # Older BB stores have no environment-provider identity and
-                # retain their directory under the environment ID instead.
-                if environment.get("workspaceProvisionType") not in {None, "personal"}:
-                    raise AcceptanceFailure("BB did not provision its own personal workspace")
-                personal_workspace = (data_root / "personal-workspaces" / environment_id).resolve()
-            if (not personal_workspace.is_relative_to(data_root) or personal_workspace == data_root
-                    or bb_workspace != personal_workspace or bb_workspace == self.workspace):
-                raise AcceptanceFailure("BB must select its own personal workspace, separate from GC")
-            self.report["assertions"].append("personal-global-separate-bb-workspace")
-        else:
-            if bb_workspace != self.workspace:
-                raise AcceptanceFailure("BB selected a different workspace")
-            self.report["assertions"].append("exact-provider-project-host-workspace")
+        if Path(environment.get("path") or "/").resolve() != self.workspace:
+            raise AcceptanceFailure("BB selected a different workspace")
+        self.report["assertions"].append("exact-provider-project-host-workspace")
 
     def verify_gc_prompt(self, prompt, provider_id, *, reviewed_creation=None):
         config_file, state_home = self.env.get("GC_BB_CONFIG"), self.env.get("XDG_STATE_HOME")
@@ -333,10 +285,7 @@ class LiveAssertions:
         bindings = [binding for binding in config.get("bindings", []) if binding.get("projectId") == self.project]
         if len(connections) != 1:
             raise AcceptanceFailure("GC config no longer identifies the exact target connection")
-        if self.personal_conversation:
-            if bindings:
-                raise AcceptanceFailure("Personal acceptance must exercise an unbound global conversation")
-        elif (len(bindings) != 1 or bindings[0].get("connection") != target.get("connection")
+        if (len(bindings) != 1 or bindings[0].get("connection") != target.get("connection")
               or bindings[0].get("city") != target.get("city")):
             raise AcceptanceFailure("GC config no longer maps the exact BB project and target")
         url = urllib.parse.urlsplit(connections[0]["url"])
@@ -373,8 +322,6 @@ class LiveAssertions:
                 stream.write(raw)
             return json.loads(raw)
 
-        if self.personal_conversation:
-            verify_global_agent_config(target, fetch("/config", "city-config", city_resource=True))
         session = fetch("", "session")
         if (session.get("id") != receipt["sessionId"] or session.get("template") != target["agent"]
                 or Path(session.get("work_dir") or "/").resolve() != self.workspace):
@@ -535,10 +482,9 @@ class LiveAssertions:
                 self.report["reused_thread"] = True
             else:
                 self.progress("spawning exact GC agent through BB")
-                environment_args = [] if self.personal_conversation else ["--environment", str(self.workspace)]
                 spawned = self.command("thread", "spawn", "--project", self.project,
                                        "--host", self.host, "--provider", "gas-city", "--model", self.model,
-                                       *environment_args, "--permission-mode", "full",
+                                       "--environment", str(self.workspace), "--permission-mode", "full",
                                        "--reasoning-level", "none", "--service-tier", "default",
                                        "--prompt", first, "--json")
                 self.thread_id = spawned.get("id")
