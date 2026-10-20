@@ -1,10 +1,10 @@
 # BB provider for Gas City
 
 Experimental **0.1.0**. This candidate targets the project-aware picker branch
-`feat/gc-project-picker` of [BB](https://github.com/get-bb/bb), based on BB
-**0.45.0** with SDK runtime **0.6.28**. The development dependency is the
-published SDK **0.6.23**; the new experimental picker contract requires the
-custom BB build. It is not yet a registry release. GC calls use the generated
+[`feat/gc-project-picker-0.46`](https://github.com/csells/bb/tree/feat/gc-project-picker-0.46)
+of Chris Sells's [BB](https://github.com/get-bb/bb) fork, based on BB **0.46.1**
+with SDK runtime **0.6.50**. The development dependency is the published SDK
+**0.6.23**; the new experimental picker contract requires the custom BB build. It is not yet a registry release. GC calls use the generated
 OpenAPI client pinned in `assets/plugin/contracts/gc/`.
 
 Open **Gas City** in BB’s sidebar. Select a connected host, a standard BB
@@ -19,13 +19,15 @@ bead work is assigned; BB preserves that configured behavior. The
 [conversation test role](./tests/conversation-agent-prompt.md) provides a minimal
 example suitable for an agent's `prompt.md`.
 
-**Release status:** this project-aware candidate is staged for review in a disposable
-Debian 13 VM. Source is published on `fix/bb-current-sdk`; it is not merged,
-promoted, or released in the registry. The candidate combines BB 0.45.0 plus the
-picker patch, SDK runtime 0.6.28, and the personal GC integration build pinned in
+**Release status:** this development branch, `dev/bb-gc` on
+[csells/gascity-packs](https://github.com/csells/gascity-packs/tree/dev/bb-gc/bb),
+is not merged, promoted, or released in the registry. It combines BB 0.46.1 plus
+the picker patch, SDK runtime 0.6.50, and the personal GC integration build
+`1.6.0-dev.c56ba65c9` pinned in
 [the generated contract provenance](./assets/plugin/contracts/gc/provenance.json).
-Provenance identifies the input; the qualification record below identifies the
-checks actually completed for each version.
+Provenance identifies the input. The qualification record below covers the
+earlier BB 0.45.0 / SDK 0.6.28 candidate and identifies the checks actually
+completed for that version; this retarget has not been requalified against it.
 Codex 0.156.1 uses Luna; Claude Code 2.1.292 uses Haiku, both at medium effort
 with subscription authentication. Qualification is recorded in
 [the candidate verification record](../specs/plans/archive/0001-bb-provider-staging.md).
@@ -61,7 +63,8 @@ agent templates. Suspended cities, rigs, and agents are excluded. Qualified
 identities distinguish agents across cities, rigs, and connections. Creation
 and restore still validate that BB and GC point to the same checkout; catalog
 visibility alone does not authorize launching in a different directory.
-The separate launcher retains its explicit global discovery mode.
+The sidebar launcher uses the same project scoping: it offers standard BB
+projects only and lists the selected project's city or rig agents.
 
 ## Prerequisites and topology
 
@@ -69,9 +72,10 @@ The separate launcher retains its explicit global discovery mode.
   supervisor, and agents with reliable structured history and activity. The
   plugin rejects supervisors older than 1.5 and explicit incomplete or failed
   startup; that minimum version check does not qualify every newer release.
-- The custom BB **0.45.0** picker build with SDK runtime **0.6.28**. Declared
-  ranges are BB `>=0.45.0 <0.46` and SDK `>=0.6.28 <0.7`; compiling uses the
-  published SDK 0.6.23 with the candidate picker contract.
+- The custom BB **0.46.1** picker build with SDK runtime **0.6.50**. Declared
+  ranges are BB `>=0.46.1 <0.47` and SDK `>=0.6.50 <0.7`; compiling uses the
+  published SDK 0.6.23 with the candidate picker contract. Stock BB 0.46.1
+  reports SDK 0.6.49, so the plugin refuses to load there.
 - Node.js **22.18+**, npm, and the BB CLI.
 - For the initial setup below, the BB server, BB execution host, Gas City, and
   pack checkout are on the same machine and run as the same operator. This
@@ -166,8 +170,8 @@ pinned CLI when evaluating this candidate; upgrading it requires new qualificati
 Clone the staging branch, then import its local path from a Gas City city:
 
 ```sh
-git clone --branch fix/bb-current-sdk \
-  https://github.com/gastownhall/gascity-packs.git
+git clone --branch dev/bb-gc \
+  https://github.com/csells/gascity-packs.git
 cd /absolute/path/to/your-city
 gc import add --name bb /absolute/path/to/gascity-packs/bb
 gc bb install
@@ -183,11 +187,8 @@ CLI, and invokes `bb plugin install path:<installed-directory>`. It forwards
 none of these installation steps.
 
 Open the **Gas City** sidebar launcher after binding a standard project below.
-For explicit conversation-only use, launch a personal conversation with a global
-agent from the **Gas City** sidebar. The native picker requires a mapped project.
-A personal conversation uses the agent’s existing GC directory. BB's personal workspace remains
-separate; the conversation shows the GC directory and explains that BB's file
-and diff views do not track it.
+Both the launcher and the native picker require a mapped standard project;
+neither starts a conversation from BB's Personal project.
 Select **Full access**: this is the bridge's supported BB permission mode;
 the agent's existing Gas City permission policy still applies. GC tmux
 approval requests are shown as explicit BB questions offering **Approve once**
@@ -242,9 +243,7 @@ agent into BB's newly created worktree.
   describe changes made in GC's different checkout.
 - `require-match` (default) blocks project prompt submission unless the real BB
   and GC working directories match. Use a matching unmanaged BB environment
-  for project work. Personal conversations with global agents use the GC-owned
-  directory and display the same workspace notice; BB requires these threads
-  to keep its separate personal workspace.
+  for project work.
 
 Set the policy while configuring a connection:
 
