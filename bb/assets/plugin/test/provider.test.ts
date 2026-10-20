@@ -31,7 +31,7 @@ test("async create, first prompt once, transcript replay, completed resume, and 
   const messages: any[] = [];
   const provider = new GasCityProvider({ send: m => messages.push(m), config: async () => f.config, journal: new Journal(join(f.cwd, "journal")) });
   try {
-    const execution = { ...options, serviceTier: "default" as const, model: targetId(target), providerOptions: { projectId: "proj_personal" } };
+    const execution = { ...options, serviceTier: "default" as const, model: targetId(target), providerOptions: { projectId: "project-web" } };
     const start = await provider.dispatch("thread/start", { threadId: "bb-thread", cwd: f.cwd, instructionMode: "append", options: execution }) as { providerThreadId: string };
     assert.match(start.providerThreadId, /^gcs1_/);
     assert.equal(f.calls.filter(c => c.path.endsWith("/sessions") && c.method === "POST").length, 1);

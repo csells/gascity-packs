@@ -24,6 +24,24 @@ function decodeRemote(value: string) {
   if (!/^gcs1_[A-Za-z0-9_-]+$/.test(value) || value.length > 5000) throw new Error("Invalid Gas City provider session ID");
   return remoteIdentity.parse(JSON.parse(Buffer.from(value.slice(5), "base64url").toString("utf8")));
 }
+/**
+ * BB's Personal project has no Gas City city or rig. Every conversation needs
+ * a project bound with `gc bb bind`, so the bridge refuses Personal (or an
+ * unbound workspace) before it creates or contacts any GC session.
+ */
+export class GasCityProjectRequiredError extends Error {
+  override readonly name = "GasCityProjectRequiredError";
+  readonly code = BRIDGE_JSON_RPC_ERRORS.BRIDGE_ERROR;
+  readonly data = { kind: "gasCityProjectRequired" } as const;
+  constructor() {
+    super("Gas City needs a mapped BB project. BB's Personal project and unbound workspaces have no Gas City city or rig; start this conversation in a project bound with gc bb bind. Nothing was sent to Gas City.");
+  }
+}
+async function mappedProjectId(config: Config, requested: unknown, cwd: string): Promise<string> {
+  const projectId = requested === undefined || requested === null ? (await bindingFor(config, { cwd }))?.projectId : String(requested);
+  if (!projectId || projectId === "proj_personal") throw new GasCityProjectRequiredError();
+  return projectId;
+}
 interface LiveSession {
   threadId: string; providerThreadId: string; target: Target; sessionId: string; reasoningLevel: ReasoningLevel;
   lease: Lease; submission?: Promise<void>; observation?: Promise<void>;
@@ -74,7 +92,7 @@ export class GasCityProvider {
     if (typeof message.id !== "string" && typeof message.id !== "number") return;
     void this.dispatch(message.method, message.params).then(
       result => this.sendResult(message.id, result),
-      error => this.deps.send({ jsonrpc: "2.0", id: message.id, error: { code: error instanceof z.ZodError ? BRIDGE_JSON_RPC_ERRORS.INVALID_PARAMS : typeof error.code === "number" ? error.code : -32000, message: error.message ?? String(error) } }),
+      error => this.deps.send({ jsonrpc: "2.0", id: message.id, error: { code: error instanceof z.ZodError ? BRIDGE_JSON_RPC_ERRORS.INVALID_PARAMS : typeof error.code === "number" ? error.code : -32000, message: error.message ?? String(error), ...(error instanceof GasCityProjectRequiredError ? { data: error.data } : {}) } }),
     );
   }
   private checkOptions(options: BridgeExecutionOptions, expected?: Target) {
@@ -120,7 +138,7 @@ export class GasCityProvider {
       return this.owned(args.threadId, async lease => {
         const config = await this.loadConfig();
         const target = this.checkOptions(args.options);
-        const projectId = String(args.options.providerOptions?.projectId ?? (await bindingFor(config, { cwd: args.cwd }))?.projectId ?? "proj_personal");
+        const projectId = await mappedProjectId(config, args.options.providerOptions?.projectId, args.cwd);
         const agent = await validateTarget(config, target, projectId);
         const connection = config.connections.find(c => c.id === target.connection)!;
         const client = this.makeClient(connection);
@@ -149,12 +167,12 @@ export class GasCityProvider {
       const remote = decodeRemote(args.providerThreadId);
       this.checkOptions(args.options, remote.target);
       return this.owned(args.threadId, async lease => {
+      const config = await this.loadConfig();
+      const projectId = await mappedProjectId(config, args.options.providerOptions?.projectId, args.cwd);
       const receipt = await this.journal.get(args.threadId);
       if (!receipt || receipt.sessionId !== remote.sessionId || targetId(receipt.target) !== targetId(remote.target)) throw new Error("This host has no ownership receipt for that Gas City conversation; restore the original host journal.");
       requireSameReasoning(args.options.reasoningLevel, receipt.reasoningLevel);
       if (receipt.turn && !["completed", "failed"].includes(receipt.turn.state)) throw new Error("A remote turn was interrupted or its delivery is uncertain. Inspect it in Gas City, then run gc bb recover --thread <BB-thread-id> after it is idle. No prompt has been resent.");
-      const config = await this.loadConfig();
-      const projectId = String(args.options.providerOptions?.projectId ?? (await bindingFor(config, { cwd: args.cwd }))?.projectId ?? "proj_personal");
       const session = await this.open(config, args.threadId, remote.target, remote.sessionId, args.cwd, projectId, lease, receipt.reasoningLevel ?? "none");
       return { providerThreadId: session.providerThreadId, sessionRestorable: true };
       });
@@ -228,8 +246,7 @@ export class GasCityProvider {
     let warning: string | undefined, workspaceContext: string | undefined;
     if (!remote.work_dir && config.workspacePolicy === "require-match") throw new Error("Gas City did not report its session working directory; cannot verify workspace ownership before sending a prompt.");
     if (remote.work_dir && await realpath(cwd) !== await realpath(remote.work_dir)) {
-      const personalConversation = projectId === "proj_personal" && !target.agent.includes("/");
-      if (config.workspacePolicy === "require-match" && !personalConversation) throw new Error(`GC works in ${remote.work_dir}; BB works in ${cwd}. Select a matching unmanaged environment before running.`);
+      if (config.workspacePolicy === "require-match") throw new Error(`GC works in ${remote.work_dir}; BB works in ${cwd}. Select a matching unmanaged environment before running.`);
       warning = `Gas City works in ${remote.work_dir}. This BB thread uses ${cwd}; its file and diff views are not synchronized with the agent's checkout.`;
       workspaceContext = `Your execution workspace is ${remote.work_dir}, owned by Gas City. BB stores this conversation in a separate directory, ${cwd}. Any BB instructions describing that directory refer to BB's interface; use your Gas City workspace for execution.`;
     }

@@ -220,7 +220,11 @@ Each path must exist. Multiple `--path` arguments cover existing worktrees;
 newly allocated BB worktrees must be bound separately. Rebinding replaces
 only that project's mapping on this host. Ambiguous workspace matches and
 unmapped standard BB projects produce an error. BB's personal project
-(`proj_personal`) remains projectless.
+(`proj_personal`) remains projectless: its picker lists no Gas City agents, and
+a conversation started there, including `bb thread spawn --project
+proj_personal` with a city agent, fails immediately with
+`GasCityProjectRequiredError` before anything is sent to Gas City. Start it in a
+mapped project instead; bind the city without `--rig` for its city agents.
 
 The launcher lists the mapped city’s globals and rig agents together. Select
 an agent and verify **Existing workspace**. Use a canonical absolute `work_dir`
