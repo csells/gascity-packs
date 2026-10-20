@@ -131,6 +131,7 @@ def create_error_fixture(runner, mode):
         save_json(runtime_config / "auth.json", {"OPENAI_API_KEY": invalid})
         with (runtime_config / "config.toml").open("x") as stream:
             stream.write('cli_auth_credentials_store = "file"\n')
+            stream.write(runner.manifest.get("codexModelConfig", ""))
             stream.write(f'[projects.{json.dumps(str(workspace))}]\ntrust_level = "trusted"\n')
             stream.write(trust_config([workspace], runner.manifest["versions"]["codex"], runner.manifest["codexHookSet"]))
     else:

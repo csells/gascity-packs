@@ -20,6 +20,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 
 from codex_hook_trust import hook_set_for, trust_config, write_provider_commands
 from native_claude_acceptance import prepare_native_claude, native_memory_provenance
@@ -135,6 +136,32 @@ def require_development_version(gc_version):
     return gc_version
 
 
+def codex_model_config(model=None, base_url=None):
+    """Top-level Codex settings selecting the model and the provider serving it.
+
+    Codex's built-in default model is not served by every OpenAI-compatible
+    gateway (Manifold, for example, rejects gpt-5.5), so acceptance can name
+    both. The provider reuses the harness's isolated auth.json key; no secret is
+    written here. Return TOML that must precede every table in config.toml.
+    """
+    text = ""
+    if model is not None:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", model):
+            raise GateError("--codex-model must be a plain model name")
+        text += f"model = {json.dumps(model)}\n"
+    if base_url is not None:
+        url = urllib.parse.urlsplit(base_url)
+        loopback = url.hostname in {"127.0.0.1", "localhost", "::1"}
+        if (url.scheme not in {"https", "http"} or (url.scheme == "http" and not loopback) or not url.hostname
+                or url.username or url.password or url.query or url.fragment):
+            raise GateError("--codex-base-url must be an https URL (or loopback http) without credentials, query or fragment")
+        text += ('model_provider = "acceptance"\n'
+                 '[model_providers.acceptance]\nname = "acceptance"\n'
+                 f"base_url = {json.dumps(base_url)}\n"
+                 'wire_api = "responses"\nsupports_websockets = false\nrequires_openai_auth = true\n')
+    return text
+
+
 def save_new(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x") as stream:
@@ -173,6 +200,8 @@ def main():
                         help="Pinned stock runtime executable for intentional authentication failure tests")
     parser.add_argument("--gc-commit", help="Exact source commit of a development GC build")
     parser.add_argument("--model-route", help="Stable route label recorded with the evidence, e.g. manifold-moonshot-kimi")
+    parser.add_argument("--codex-model", help="Codex model for every acceptance agent, e.g. gpt-6-astra; default: Codex's own default")
+    parser.add_argument("--codex-base-url", help="OpenAI-compatible Responses endpoint serving --codex-model, using the harness's Codex key; default: Codex's built-in OpenAI provider")
     args = parser.parse_args()
     if args.timeout < 1:
         parser.error("--timeout must be positive")
@@ -184,6 +213,12 @@ def main():
         parser.error("--gc-development-base requires --gc-commit for exact source identity")
     if args.gc_commit and not re.fullmatch(r"[0-9a-f]{40}", args.gc_commit):
         parser.error("--gc-commit must be a complete source commit")
+    if (args.codex_model or args.codex_base_url) and args.runtime != "codex":
+        parser.error("--codex-model and --codex-base-url require --runtime codex")
+    try:
+        codex_settings = codex_model_config(args.codex_model, args.codex_base_url)
+    except GateError as error:
+        parser.error(str(error))
     args.report_dir = args.report_dir.resolve()
     args.report_dir.mkdir(parents=True, exist_ok=False)
     os.umask(0o077)
@@ -305,6 +340,9 @@ def main():
         codex_hook_set = hook_set_for(gc_version, CORE_COMMITS)
         if args.runtime == "codex":
             report["codexHookSet"] = codex_hook_set
+            report["codexModel"] = args.codex_model or "codex-default"
+            if args.codex_base_url:
+                report["codexBaseUrl"] = args.codex_base_url
         report["versions"] = {"gc": gc_version,
                               "bb": run("bb", "--version").stdout.strip(),
                               args.runtime: run(args.runtime, "--version").stdout.strip()}
@@ -323,6 +361,7 @@ def main():
             "hasCompletedOnboarding": True, "theme": "dark", "projects": projects})
         (root / "codex-config").mkdir(exist_ok=True)
         with (root / "codex-config/config.toml").open("x") as stream:
+            stream.write(codex_settings)
             for workspace in workspaces.values():
                 stream.write(f'[projects.{json.dumps(str(workspace))}]\ntrust_level = "trusted"\n')
             if args.runtime == "codex":
@@ -433,7 +472,7 @@ def main():
                 "gcCommit": args.gc_commit or CORE_COMMITS[core_release],
                 **({"modelRoute": args.model_route} if args.model_route else {}),
                 "verificationMode": report["verificationMode"], "appPid": app_process.pid,
-                "codexHookSet": codex_hook_set,
+                "codexHookSet": codex_hook_set, "codexModelConfig": codex_settings,
             })
             prepared = True
             report["status"] = "prepared"

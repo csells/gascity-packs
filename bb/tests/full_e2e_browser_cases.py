@@ -232,6 +232,12 @@ def create_fixture(runner, *, trusted=True, configured_mayor=False):
             "projectOnboardingSeenCount": int(trusted)}
         # This is the new private copy; its original remains in source_config.
         settings_path.write_text(json.dumps(settings) + "\n"); settings_path.chmod(0o600)
+    elif runner.runtime == "codex" and not trusted and runner.manifest.get("codexModelConfig"):
+        # A fresh-trust fixture omits the copied config.toml, which also carried
+        # the model and provider; restore only those top-level settings.
+        with (runtime_config / "config.toml").open("x") as stream:
+            stream.write(runner.manifest["codexModelConfig"])
+        (runtime_config / "config.toml").chmod(0o600)
     elif runner.runtime == "codex" and trusted:
         from codex_hook_trust import trust_config
         with (runtime_config / "config.toml").open("a") as stream:
