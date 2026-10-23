@@ -1,9 +1,9 @@
 {
   "title": "Gas City Supervisor API",
-  "source_repository": "https://github.com/csells/gascity",
-  "source_commit": "c56ba65c96f304748b3592476243c44fa6fbd1f5",
-  "build": "unreleased (local integration/bb at c56ba65c9, stamped 1.6.0-dev.c56ba65c9)",
-  "notes": "Canonical OpenAPI checked in at internal/api/openapi.json on the local Gas City integration branch integration/bb at c56ba65c9 (merge base with gastownhall/gascity main: b30c09996). The branch is not pushed to csells/gascity, so this commit is not on a public ref yet. The matching binary is /var/tmp/gc-integration/gc on hillsboro. Live-schema equality is a separate staging qualification gate; no release or stable promotion is implied.",
-  "sha256": "d330c66ad66e124cc6836c792dd368f7347d14ee907142e76c61a6cf8fdc7acc",
+  "source_repository": "https://github.com/gastownhall/gascity",
+  "source_commit": "a926d04f076eafae02296f345fdc2ea93eea3690",
+  "build": "unreleased (gastownhall/gascity main at a926d04f0)",
+  "notes": "Canonical OpenAPI checked in at internal/api/openapi.json on gastownhall/gascity main at a926d04f0, which contains the merged session API work (#7944, #8053). Since #8053, GET /v0/city/{cityName}/request/{requestId} requires after_seq (the 202 event_cursor); the bridge does not call that endpoint, so only the generated client changed. Live-schema equality is a separate staging qualification gate; no release or stable promotion is implied.",
+  "sha256": "1767c3265f4e7fb1b2e83bb048cc388df49ebb0a0f70e7de5c801fb6f1392f01",
   "generator": "@hey-api/openapi-ts@0.99.0"
 }

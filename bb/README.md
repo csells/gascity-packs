@@ -22,8 +22,8 @@ example suitable for an agent's `prompt.md`.
 **Release status:** this development branch, `dev/bb-gc` on
 [csells/gascity-packs](https://github.com/csells/gascity-packs/tree/dev/bb-gc/bb),
 is not merged, promoted, or released in the registry. It combines BB 0.46.1 plus
-the picker patch, SDK runtime 0.6.50, and the personal GC integration build
-`1.6.0-dev.c56ba65c9` pinned in
+the picker patch, SDK runtime 0.6.50, and the GC API of gastownhall/gascity
+main at `a926d04f0`, pinned in
 [the generated contract provenance](./assets/plugin/contracts/gc/provenance.json).
 Provenance identifies the input. The qualification record below covers the
 earlier BB 0.45.0 / SDK 0.6.28 candidate and identifies the checks actually
