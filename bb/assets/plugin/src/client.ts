@@ -5,8 +5,19 @@ import type { AsyncAcceptedBody, CreateSessionData, SubmitSessionData, RespondSe
 import type { Frame } from "./transcript.js";
 import type { Connection } from "./config.js";
 
+/** GC's problem-details fields, when an error response carries them. */
+export interface Problem { code?: string; detail?: string }
 export class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public problem?: Problem) { super(message); }
+}
+/** Each non-streaming GC request is abandoned after this long. */
+export const GC_REQUEST_TIMEOUT_MS = 20_000;
+function problemOf(body: string): Problem | undefined {
+  try {
+    const value = JSON.parse(body);
+    if (!value || typeof value !== "object") return undefined;
+    return { code: typeof value.code === "string" ? value.code : undefined, detail: typeof value.detail === "string" ? value.detail : undefined };
+  } catch { return undefined; }
 }
 export interface SSE { event: string; id?: string; data: string }
 export async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncGenerator<SSE> {
@@ -56,12 +67,12 @@ export class GasCityClient {
     const headers = new Headers(request.headers);
     if (!headers.has("Accept")) headers.set("Accept", "application/json");
     if (process.env.GC_BB_AUTH_TOKEN) headers.set("Authorization", `Bearer ${process.env.GC_BB_AUTH_TOKEN}`);
-    const signal = headers.get("Accept") === "text/event-stream" ? request.signal : AbortSignal.any([request.signal, AbortSignal.timeout(20_000)]);
+    const signal = headers.get("Accept") === "text/event-stream" ? request.signal : AbortSignal.any([request.signal, AbortSignal.timeout(GC_REQUEST_TIMEOUT_MS)]);
     const response = await this.transport(request.url, { method: request.method, headers,
       ...(request.body ? { body: await request.text() } : {}), redirect: "error", signal });
     if (!response.ok) {
       const body = (await response.text()).slice(0, 1200);
-      throw new ApiError(response.status, `Gas City ${response.status} on ${new URL(request.url).pathname}: ${body}`);
+      throw new ApiError(response.status, `Gas City ${response.status} on ${new URL(request.url).pathname}: ${body}`, problemOf(body));
     }
     return response;
   }

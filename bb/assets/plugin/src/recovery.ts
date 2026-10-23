@@ -7,12 +7,12 @@ import type { Config } from "./config.js";
 export const sessionAlias = (threadId: string) => `bb-${createHash("sha256").update(threadId).digest("hex").slice(0, 24)}`;
 
 /** Resolve creation without repeating the mutation, including a lost HTTP reply. */
-export async function resolveCreation(client: GasCityClient, threadId: string, receipt: Receipt): Promise<string> {
+export async function resolveCreation(client: GasCityClient, threadId: string, receipt: Receipt, signal?: AbortSignal): Promise<string> {
   if (receipt.sessionId) return receipt.sessionId;
   const alias = receipt.alias ?? sessionAlias(threadId);
   const remote = receipt.create
-    ? (await client.result(receipt.target.city, receipt.create, "create")).session
-    : await client.getSession(receipt.target.city, alias).catch(error => {
+    ? (await client.result(receipt.target.city, receipt.create, "create", signal)).session
+    : await client.getSession(receipt.target.city, alias, signal).catch(error => {
       if (error instanceof ApiError && error.status === 404) throw new Error(`Creation of ${alias} remains uncertain. It has not appeared in Gas City; retry recovery after creation settles. No new session was created.`);
       throw error;
     });

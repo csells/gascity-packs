@@ -17,7 +17,7 @@ export async function fixture() {
   const sessions = new Map<string, any>();
   const events: any[] = [];
   const held = new Set<ServerResponse>();
-  const faults = { dropSubmitReply: false, dropCreateReply: false, workDir: "", freshHistoryFallback: false };
+  const faults = { dropSubmitReply: false, dropCreateReply: false, workDir: "", freshHistoryFallback: false, holdCreateResult: false, refuseCreate: undefined as { status: number; problem: unknown } | undefined };
   const providers = ["claude", "codex"].map(name => ({ name, options_schema: [{ key: "effort", type: "select", choices: ["", "low", "medium", "high", "xhigh", ...(name === "claude" ? ["max"] : [])].map(value => ({ value, label: value || "Default" })) }] }));
   let seq = 0;
   const server = createServer(async (req, res) => {
@@ -38,11 +38,14 @@ export async function fixture() {
       { name: "generic", dir: "", scope: "rig" },
     ] });
     if (path.endsWith("/sessions") && req.method === "POST") {
+      if (faults.refuseCreate) return json(faults.refuseCreate.problem, faults.refuseCreate.status);
       const id = `s${sessions.size + 1}`;
       const session = { id, template: body.name, state: "running", work_dir: faults.workDir || cwd, messages: [] as any[], title: body.title, provider: "claude", session_name: body.alias, alias: body.alias, created_at: "2026-09-05T00:00:00Z", attached: false, running: true, streams: new Set<ServerResponse>() };
       sessions.set(id, session);
       const request_id = `req-${++seq}`;
-      events.push({ seq, type: "request.result.session.create", payload: { request_id, session } });
+      // A held create is accepted but never made commandable: GC publishes no
+      // result for it, as for a start-pending session the controller never starts.
+      if (!faults.holdCreateResult) events.push({ seq, type: "request.result.session.create", payload: { request_id, session } });
       if (faults.dropCreateReply) { res.destroy(); return; }
       return json({ status: "accepted", request_id, event_cursor: String(seq - 1) }, 202);
     }

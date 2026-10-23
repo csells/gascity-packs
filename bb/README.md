@@ -43,7 +43,7 @@ are historical evidence for their own pinned combinations.
 | Model choice | Exact configured agent identity: connection + city + qualified agent name |
 | Project | Explicit BB project ID → connection + city + rig binding |
 | Existing workspace | Longest matching configured checkout/worktree path |
-| Thread | One new template-backed GC session, with a durable local ownership receipt |
+| Thread | One new template-backed GC session, with a durable local ownership receipt. If GC refuses the create (for example, a `max_active_sessions = 1` agent whose one session is its `[[named_session]]`), BB shows GC's explanation; if GC accepts it but does not make the session commandable within 90 seconds, BB gets the bridge's own error before its 120-second thread start limit |
 | Prompt / streamed answer | GC asynchronous submit / structured transcript SSE |
 | Interrupt | Stop the accepted turn through GC with confirmed owned-command termination |
 | Release / host disconnect | Detach the BB bridge; retain the GC session |

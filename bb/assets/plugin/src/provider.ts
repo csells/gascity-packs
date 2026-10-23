@@ -12,7 +12,7 @@ import {
 import { z } from "zod";
 import { bindingFor, readConfig, statePath, type Config, type Connection } from "./config.js";
 import { discover, modelRow, parseTarget, targetId, validateTarget, type Target } from "./catalog.js";
-import { GasCityClient } from "./client.js";
+import { ApiError, GasCityClient } from "./client.js";
 import { Journal, type Receipt, type Lease } from "./journal.js";
 import { resolveCreation, sessionAlias } from "./recovery.js";
 import { Transcript, type Frame, type TurnOutcome } from "./transcript.js";
@@ -37,6 +37,32 @@ export class GasCityProjectRequiredError extends Error {
     super("Gas City needs a mapped BB project. BB's Personal project and unbound workspaces have no Gas City city or rig; start this conversation in a project bound with gc bb bind. Nothing was sent to Gas City.");
   }
 }
+/**
+ * BB's agent runtime abandons a provider's thread/start after two minutes
+ * (DEFAULT_THREAD_CREATION_REQUEST_TIMEOUT_MS in packages/agent-runtime of the
+ * BB fork) and reports only "JSON-RPC request timed out: thread/start".
+ */
+export const BB_THREAD_START_TIMEOUT_MS = 120_000;
+/**
+ * How long thread/start waits for GC to create the session and make it
+ * commandable. GC's own wait is also two minutes, so the bridge stops first,
+ * leaving room for one more bounded GC request before BB's timeout.
+ */
+export const THREAD_START_BUDGET_MS = 90_000;
+/**
+ * GC accepted the session create but did not make the session commandable
+ * within the thread/start budget. The bridge reports this itself rather than
+ * letting BB's RPC timeout hide it.
+ */
+export class GasCitySessionNotCommandableError extends Error {
+  override readonly name = "GasCitySessionNotCommandableError";
+  readonly code = BRIDGE_JSON_RPC_ERRORS.BRIDGE_ERROR;
+  readonly data: { kind: "gasCitySessionNotCommandable"; alias: string };
+  constructor(agent: string, alias: string) {
+    super(`Gas City accepted a session for ${agent} but did not make it commandable within ${THREAD_START_BUDGET_MS / 1000} seconds, so this BB thread did not start. GC may still be starting it, or may never start it (for example, when the agent's only session slot is taken). Inspect session ${alias} with gc session list; starting this thread again resumes that creation instead of creating another session. No prompt was sent.`);
+    this.data = { kind: "gasCitySessionNotCommandable", alias };
+  }
+}
 async function mappedProjectId(config: Config, requested: unknown, cwd: string): Promise<string> {
   const projectId = requested === undefined || requested === null ? (await bindingFor(config, { cwd }))?.projectId : String(requested);
   if (!projectId || projectId === "proj_personal") throw new GasCityProjectRequiredError();
@@ -54,6 +80,7 @@ interface Dependencies {
   client?: (connection: Connection) => GasCityClient;
   journal?: Journal;
   readinessDeadline?: () => AbortSignal;
+  creationDeadline?: () => AbortSignal;
 }
 export class GasCityProvider {
   readonly sessions = new Map<string, LiveSession>();
@@ -92,7 +119,7 @@ export class GasCityProvider {
     if (typeof message.id !== "string" && typeof message.id !== "number") return;
     void this.dispatch(message.method, message.params).then(
       result => this.sendResult(message.id, result),
-      error => this.deps.send({ jsonrpc: "2.0", id: message.id, error: { code: error instanceof z.ZodError ? BRIDGE_JSON_RPC_ERRORS.INVALID_PARAMS : typeof error.code === "number" ? error.code : -32000, message: error.message ?? String(error), ...(error instanceof GasCityProjectRequiredError ? { data: error.data } : {}) } }),
+      error => this.deps.send({ jsonrpc: "2.0", id: message.id, error: { code: error instanceof z.ZodError ? BRIDGE_JSON_RPC_ERRORS.INVALID_PARAMS : typeof error.code === "number" ? error.code : -32000, message: error.message ?? String(error), ...(error instanceof GasCityProjectRequiredError || error instanceof GasCitySessionNotCommandableError ? { data: error.data } : {}) } }),
     );
   }
   private checkOptions(options: BridgeExecutionOptions, expected?: Target) {
@@ -135,6 +162,7 @@ export class GasCityProvider {
     if (method === "thread/start") {
       const args = threadStartParamsSchema.parse(input);
       if (args.input?.length) this.text(args.input);
+      const deadline = this.deps.creationDeadline?.() ?? AbortSignal.timeout(THREAD_START_BUDGET_MS);
       return this.owned(args.threadId, async lease => {
         const config = await this.loadConfig();
         const target = this.checkOptions(args.options);
@@ -150,11 +178,22 @@ export class GasCityProvider {
           receipt = { target, threadId: args.threadId, alias: sessionAlias(args.threadId), reasoningLevel };
           await this.journal.put(args.threadId, receipt);
           const alias = receipt.alias;
-          receipt.create = await client.createSession(target.city, { kind: "agent", name: target.agent, alias, title: `BB · ${target.agent}`, project_id: projectId, ...(reasoningLevel === "none" ? {} : { options: { effort: reasoningLevel } }) });
+          try {
+            receipt.create = await client.createSession(target.city, { kind: "agent", name: target.agent, alias, title: `BB · ${target.agent}`, project_id: projectId, ...(reasoningLevel === "none" ? {} : { options: { effort: reasoningLevel } }) }, deadline);
+          } catch (error) {
+            // A 4xx answer is GC's definite refusal: it created nothing.
+            if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.problem?.detail)
+              throw new Error(`Gas City refused to create a session for ${target.agent}${error.problem.code ? ` (${error.problem.code})` : ""}: ${error.problem.detail}. No session was created and no prompt was sent.`);
+            throw error;
+          }
           await this.journal.put(args.threadId, receipt);
         }
         if (!receipt.sessionId) {
-          receipt.sessionId = await resolveCreation(client, args.threadId, receipt);
+          try { receipt.sessionId = await resolveCreation(client, args.threadId, receipt, deadline); }
+          catch (error) {
+            if (deadline.aborted) throw new GasCitySessionNotCommandableError(target.agent, receipt.alias ?? sessionAlias(args.threadId));
+            throw error;
+          }
           await this.journal.put(args.threadId, receipt);
         }
         const session = await this.open(config, args.threadId, target, receipt.sessionId!, args.cwd, projectId, lease, receipt.reasoningLevel ?? "none");

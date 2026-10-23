@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { experimental_assembleCapturedThreadEvents, experimental_runBridgeConformance, experimental_formatConformanceReport } from "@get-bb/plugin-sdk/provider-bridge/testing";
-import { GasCityProvider } from "../src/provider.js";
+import { BRIDGE_JSON_RPC_ERRORS } from "@get-bb/plugin-sdk/provider-bridge";
+import { BB_THREAD_START_TIMEOUT_MS, GasCityProvider, GasCitySessionNotCommandableError, THREAD_START_BUDGET_MS } from "../src/provider.js";
 import { Journal, type Receipt } from "../src/journal.js";
-import { GasCityClient } from "../src/client.js";
+import { GC_REQUEST_TIMEOUT_MS, GasCityClient } from "../src/client.js";
 import { targetId } from "../src/catalog.js";
 import { fixture, frame, options, until } from "./fixture.js";
 
@@ -541,6 +542,45 @@ test("a second bridge cannot resume or recover an owned thread even while idle",
     await first.dispatch("thread/stop", { threadId: "owned", providerThreadId: start.providerThreadId, intent: "release", activeTurnId: null });
     await second.dispatch("thread/resume", resume);
   } finally { await first.close(); await second.close(); await f.close(); }
+});
+
+
+test("thread/start returns its own error before BB's RPC timeout when GC never makes the session commandable", async () => {
+  const f = await fixture(); const journal = new Journal(join(f.cwd, "journal"));
+  const provider = new GasCityProvider({ send: () => {}, config: async () => f.config, journal, creationDeadline: () => AbortSignal.timeout(150) });
+  try {
+    f.faults.holdCreateResult = true;
+    const args = { threadId: "never-commandable", cwd: f.cwd, instructionMode: "append", options: { ...options, model: targetId(target) } };
+    const started = Date.now();
+    const error: any = await provider.dispatch("thread/start", args).then(() => assert.fail("thread/start must fail"), e => e);
+    assert.ok(Date.now() - started < 5_000, "thread/start must not wait out GC's own commandable deadline");
+    assert.ok(error instanceof GasCitySessionNotCommandableError, `got ${error}`);
+    assert.match(error.message, /accepted a session for gc\.mayor but did not make it commandable within 90 seconds/);
+    assert.match(error.message, /No prompt was sent/);
+    assert.equal(error.code, BRIDGE_JSON_RPC_ERRORS.BRIDGE_ERROR);
+    assert.equal(error.data.kind, "gasCitySessionNotCommandable");
+    // The accepted create stays journaled, so a retry resumes it rather than
+    // creating a second session.
+    assert.ok((await journal.get("never-commandable"))?.create?.request_id);
+    assert.equal(f.calls.filter(c => c.path.endsWith("/sessions") && c.method === "POST").length, 1);
+  } finally { await provider.close(); await f.close(); }
+});
+
+test("the thread/start budget, plus one bounded GC request, ends before BB's thread/start timeout", () => {
+  assert.equal(BB_THREAD_START_TIMEOUT_MS, 120_000);
+  assert.ok(THREAD_START_BUDGET_MS + GC_REQUEST_TIMEOUT_MS < BB_THREAD_START_TIMEOUT_MS);
+});
+
+test("a GC refusal of the session create reaches BB with GC's explanation", async () => {
+  const f = await fixture();
+  const provider = new GasCityProvider({ send: () => {}, config: async () => f.config, journal: new Journal(join(f.cwd, "journal")) });
+  try {
+    const detail = 'cannot create a session: agent "gc.mayor" has max_active_sessions = 1, and its one session is the configured named session "gc.mayor"';
+    f.faults.refuseCreate = { status: 400, problem: { type: "urn:gascity:error:named-singleton", title: "Named Singleton Agent", status: 400, detail, code: "named-singleton" } };
+    const args = { threadId: "refused", cwd: f.cwd, instructionMode: "append", options: { ...options, model: targetId(target) } };
+    const error: any = await provider.dispatch("thread/start", args).then(() => assert.fail("thread/start must fail"), e => e);
+    assert.equal(error.message, `Gas City refused to create a session for gc.mayor (named-singleton): ${detail}. No session was created and no prompt was sent.`);
+  } finally { await provider.close(); await f.close(); }
 });
 
 
